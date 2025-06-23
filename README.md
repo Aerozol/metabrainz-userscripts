@@ -1,2 +1,2 @@
 # metabrainz-userscripts
-My MusicBrainz userscripts
+MusicBrainz userscripts written by chatGPT
