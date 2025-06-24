@@ -5,16 +5,22 @@ MusicBrainz userscripts written by chatGPT, barely checked by me. Use at your ow
 
 Adds a button to submit and remember tag strings. Ctrl+click to forget them again. Works!
 
-<a href="[https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js)">
-  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="My Button" title="This is the rollover text"" >
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"" >
 </a>
 
-[![Source](https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png)](https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js)
-[![Install](https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png)](https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Elephant%20Tags.user.js)
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Elephant%20Tags.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"" >
+</a>
 
 ### <a name="musicbrainz_rym_link_checker"></a> MusicBrainz RYM Link Checker
 
 Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probably very inefficient and sometimes kind of works.
 
-[![Source](https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png)](https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20RYM%20Link%20Checker.user.js)
-[![Install](https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png)](https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20RYM%20Link%20Checker.user.js)
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20RYM%20Link%20Checker.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"" >
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20RYM%20Link%20Checker.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"" >
+</a>
