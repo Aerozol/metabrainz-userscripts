@@ -13,6 +13,10 @@ Adds a button to submit and remember tag strings. Ctrl+click to forget them agai
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
 </a>
 
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/elephant_tags.png">
+  <img src="https://raw.github.com/Aerozol/Dump/blob/main/Screenshot-button.png" alt="Screenshot" title="Screenshot" target="_blank""> 
+</a>
+
 ### <a name="musicbrainz_rym_link_checker"></a> MusicBrainz RYM Link Checker
 
 Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probably very inefficient and sometimes kind of works.
@@ -23,4 +27,8 @@ Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probab
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20RYM%20Link%20Checker.user.js">
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"">
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/rym_link_checker.png">
+  <img src="https://raw.github.com/Aerozol/Dump/blob/main/Screenshot-button.png" alt="Screenshot" title="Screenshot" target="_blank""> 
 </a>
