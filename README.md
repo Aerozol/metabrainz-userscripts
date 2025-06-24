@@ -5,6 +5,10 @@ MusicBrainz userscripts written by chatGPT, barely checked by me. Use at your ow
 
 Adds a button to submit and remember tag strings. Ctrl+click to forget them again. Works!
 
+<a href="[https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js)" title="This is the rollover text">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="My Button">
+</a>
+
 [![Source](https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png)](https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js)
 [![Install](https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png)](https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Elephant%20Tags.user.js)
 
