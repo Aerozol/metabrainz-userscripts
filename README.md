@@ -6,7 +6,7 @@ MusicBrainz userscripts written by chatGPT, barely checked by me. Use at your ow
 Adds a button to submit and remember tag strings. Ctrl+click to forget them again. Works!
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js">
-  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"" >
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
 </a>
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Elephant%20Tags.user.js">
@@ -22,5 +22,5 @@ Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probab
 </a>
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20RYM%20Link%20Checker.user.js">
-  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"" >
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"">
 </a>
