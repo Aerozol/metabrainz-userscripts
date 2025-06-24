@@ -13,7 +13,7 @@ Adds a button to submit and remember tag strings. Ctrl+click to forget them agai
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
 </a>
 
-<a href="./screenshots/elephant_tags.png" target="_blank">
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/elephant-tags.png" target="_blank">
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
