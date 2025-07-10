@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         MusicBrainz: Quick Join Phrases
 // @description  Click to add common join phrases (release editor)
-// @version      2025-07-10.4
+// @version      2025-07-10.6
 // @author       ChatGPT
-// @match *://*.musicbrainz.org/release/add*
-// @match *://*.musicbrainz.org/release/*/edit*
+// @match        *://*.musicbrainz.org/release/add*
+// @match        *://*.musicbrainz.org/release/*/edit*
 // @grant        none
 // ==/UserScript==
 
@@ -17,6 +17,22 @@
         ' narrated by ',
         ' read by '
     ];
+
+    function insertPhrase(input, phrase) {
+        input.focus();
+        input.select();
+        document.execCommand('delete');
+        document.execCommand('insertText', false, phrase);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function clickDoneButton(form) {
+        const doneBtn = form.querySelector('button.positive');
+        if (doneBtn) {
+            doneBtn.click();
+        }
+    }
 
     function addFloatingButtonBox() {
         const allJoinInputs = Array.from(document.querySelectorAll('input[id*="join-phrase-"]'));
@@ -43,30 +59,59 @@
         container.style.fontSize = '11px';
 
         phrases.forEach(phrase => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+
+            // Join phrase button
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.textContent = phrase.trim();
             btn.title = `Insert join phrase "${phrase.trim()}"`;
             btn.style.cssText = `
+                width: 80px;
                 font-size: 11px;
-                padding: 4px 6px;
+                padding: 4px 0;
                 cursor: pointer;
                 background: #eee;
                 border: 1px solid #bbb;
-                border-radius: 3px;
+                border-right: none;
+                border-radius: 4px 0 0 4px;
+                text-align: center;
+                user-select: none;
             `;
             btn.addEventListener('click', () => {
-                targetInput.focus();
-                targetInput.select();
-                document.execCommand('delete');
-                document.execCommand('insertText', false, phrase);
-                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-                targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                insertPhrase(targetInput, phrase);
             });
-            container.appendChild(btn);
+
+            // Tick button
+            const tick = document.createElement('button');
+            tick.type = 'button';
+            tick.textContent = '✔';
+            tick.title = `Insert "${phrase.trim()}" and click Done`;
+            tick.style.cssText = `
+                width: 30px;
+                font-size: 11px;
+                padding: 2px 0;
+                cursor: pointer;
+                background: #e6f4e8;
+                border: 1px solid #8cc084;
+                border-radius: 0 4px 4px 0;
+                color: #155724;
+                text-align: center;
+                user-select: none;
+                height: 21px;
+            `;
+            tick.addEventListener('click', () => {
+                insertPhrase(targetInput, phrase);
+                setTimeout(() => clickDoneButton(form), 50);
+            });
+
+            row.appendChild(btn);
+            row.appendChild(tick);
+            container.appendChild(row);
         });
 
-        // Ensure form is relatively positioned so the floating box works correctly
         if (getComputedStyle(form).position === 'static') {
             form.style.position = 'relative';
         }
