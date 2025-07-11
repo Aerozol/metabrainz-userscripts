@@ -19,7 +19,7 @@ Adds a button to submit and remember tag strings. Ctrl+click to forget them agai
 
 ### <a name="musicbrainz_quick_add_medium"></a> MusicBrainz Quick Add Medium
 
-Adds customizable buttons for adding mediums with specific formats in the release editor. Works!
+Adds buttons for quickly adding mediums from a customisable range of formats in the release editor. Shift-click to set the first medium with no format. Check the tooltip for more. Works!
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Quick%20Add%20Medium.user.js">
   <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
