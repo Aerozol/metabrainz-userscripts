@@ -153,7 +153,7 @@
     fieldset.className = 'guesscase';
 
     const legend = document.createElement('legend');
-    legend.textContent = 'Add medium';
+    legend.textContent = 'Quick add medium';
 
     fieldset.appendChild(legend);
 
@@ -208,6 +208,7 @@
     tip.title = 'Alt+Click: Add medium & mark tracklist unknown.\nShift+Click: Set format on first existing medium with no format.';
     tip.style.cssText = `
       position: absolute;
+      margin-top: 8px;
       top: 6px;
       right: 10px;
       width: 16px;
