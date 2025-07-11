@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         MusicBrainz: Quick Join Phrases
+// @name         MusicBrainz Quick Join Phrases
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Click to add common join phrases (release editor)
 // @version      2025-07-10.6
