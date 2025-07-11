@@ -17,6 +17,22 @@ Adds a button to submit and remember tag strings. Ctrl+click to forget them agai
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
+### <a name="musicbrainz_quick_add_medium"></a> MusicBrainz Quick Add Medium
+
+Adds customizable buttons for adding mediums with specific formats in the release editor. Works!
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Quick%20Add%20Medium.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Quick%20Add%20Medium.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick_add_medium.png" target="_blank">
+  <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
 ### <a name="musicbrainz_quick_join_phrases"></a> MusicBrainz Quick Join Phrases
 
 Adds a number of shortcuts that will fill some common join phrases into the second-to-last join phrase field. Works!
@@ -29,7 +45,7 @@ Adds a number of shortcuts that will fill some common join phrases into the seco
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
 </a>
 
-<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick%20join%20phrases.png" target="_blank">
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick_join_phrases.png" target="_blank">
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
