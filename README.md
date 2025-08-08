@@ -49,6 +49,22 @@ Adds a number of shortcuts that will fill some common join phrases into the seco
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
+### <a name="musicbrainz_quick_join_phrases"></a> MusicBrainz Quick Recording Match
+
+Adds buttons to the release editor "Recordings" tab to select the first recording search result for each track, and to unset all recordingsd. Works!
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Quick%20Recording%20Match.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Quick%20Recording%20Match.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick_recording_match.png" target="_blank">
+  <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
 ### <a name="musicbrainz_rym_link_checker"></a> MusicBrainz RYM Link Checker
 
 Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probably very inefficient and sometimes kind of works.
