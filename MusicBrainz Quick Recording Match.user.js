@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name        MusicBrainz Quick Recording Match
 // @namespace   https://github.com/Aerozol/metabrainz-userscripts
-// @description Adds buttons to the MusicBrainz release editor "Recordings" tab to select the first recording search result for each track, and to unset all recordings
+// @description Select the first recording search result for each track, in the release editor Recordings tab. Highlights bad matches.
 // @match       *://*.musicbrainz.org/release/*/edit*
 // @match       *://*.beta.musicbrainz.org/release/add
 // @author      Gemini
 // @grant       none
-// @version     2.6
+// @version     5.0
 // @run-at      document-idle
 // ==/UserScript==
 
@@ -17,6 +17,104 @@
     let currentIndex = 0;
     let editButtons;
     let mainButtons;
+    let currentTrackRow = null;
+
+    function parseLengthToMs(lengthText) {
+        const match = lengthText.match(/(\d+):(\d+)/);
+        if (match) {
+            const minutes = parseInt(match[1]);
+            const seconds = parseInt(match[2]);
+            return (minutes * 60 + seconds) * 1000;
+        }
+        return null;
+    }
+
+    /**
+     * Checks for differences and highlights the edit button for a single track row.
+     * @param {HTMLElement} trackRow The <tr> element of the track to check.
+     */
+    function highlightSingleTrack(trackRow) {
+        if (!trackRow) return;
+        const artistRow = trackRow.nextElementSibling;
+
+        const editButton = trackRow.querySelector('.edit-track-recording');
+        if (editButton) {
+            editButton.style.backgroundColor = '';
+            editButton.title = '';
+        }
+
+        const isUnlinked = trackRow.querySelector('.edit-track-recording.negative') !== null;
+
+        if (isUnlinked) {
+            return;
+        }
+
+        const differences = [];
+        let lengthDiff = 0;
+
+        const nameCells = trackRow.querySelectorAll('td.name');
+        const trackTitleCell = nameCells[0];
+        const recordingTitleCell = nameCells[1];
+
+        const trackLengthCell = trackRow.querySelector('td.length');
+        const recordingLengthCell = trackRow.querySelector('td.length[data-bind*="recording().formattedLength"]');
+
+        const trackArtistCell = artistRow?.querySelector('td[colspan="2"]:first-of-type > span');
+        const recordingArtistCell = artistRow?.querySelector('td[colspan="2"]:last-of-type > span');
+
+        const trackTitle = trackTitleCell?.querySelector('bdi')?.textContent.trim().toLowerCase();
+        const recordingTitle = recordingTitleCell?.querySelector('bdi')?.textContent.trim().toLowerCase();
+        const trackArtists = trackArtistCell?.textContent.trim().toLowerCase();
+        const recordingArtists = recordingArtistCell?.textContent.trim().toLowerCase();
+
+        if (trackLengthCell && recordingLengthCell) {
+            const trackLengthMs = parseLengthToMs(trackLengthCell.textContent.trim());
+            const recordingLengthMs = parseLengthToMs(recordingLengthCell.textContent.trim());
+            if (trackLengthMs !== null && recordingLengthMs !== null) {
+                lengthDiff = Math.abs(trackLengthMs - recordingLengthMs);
+            }
+        }
+
+        if (recordingTitle && trackTitle && trackTitle !== recordingTitle) {
+            differences.push('Title');
+        }
+
+        if (recordingArtists && trackArtists && trackArtists !== recordingArtists) {
+            differences.push('Artist');
+        }
+
+        if (lengthDiff > 0) {
+            differences.push(`Length (${Math.floor(lengthDiff / 1000)}s)`);
+        }
+
+        if (editButton) {
+            const tooltipText = differences.length > 0 ? differences.join(', ') + ' difference' : '';
+
+            if (differences.length >= 3 && lengthDiff > 10000) {
+                 // everything different, including a length change over 10 seconds - red
+                editButton.style.backgroundColor = '#ffaea1'; // Red
+                editButton.title = `Multiple major differences: ${tooltipText}`;
+            } else if (lengthDiff > 15000) {
+                // a length change over 15 seconds - dark orange
+                editButton.style.backgroundColor = '#ffc5a1'; // Dark Orange
+                editButton.title = `Major length difference (> 15 seconds). ${tooltipText}`;
+            } else if (differences.length >= 2 && lengthDiff <= 15000) {
+                // 2 differences, including a length change up to 15 seconds - orange
+                editButton.style.backgroundColor = '#ffd0a1'; // Orange
+                editButton.title = `Multiple differences found: ${tooltipText}`;
+            } else if (differences.length === 1 || lengthDiff > 3000) {
+                // 1 difference OR length change over 3 seconds - yellow
+                editButton.style.backgroundColor = '#ffe6a1'; // Yellow
+                editButton.title = `Minor difference found: ${tooltipText}`;
+            }
+        }
+    }
+
+    function highlightAllDifferences() {
+        console.log("MusicBrainz Quick Tools: Starting difference highlighting for all tracks.");
+        const trackRows = document.querySelectorAll('#track-recording-assignation tr.track');
+        trackRows.forEach(highlightSingleTrack);
+    }
 
     function createButton(text, onClickHandler) {
         const button = document.createElement('button');
@@ -88,7 +186,7 @@
             right: 20px;
             padding: 10px 20px;
             font-size: 16px;
-            background-color: #f44336;
+            background-color: #d32f2f;
             color: white;
             border: none;
             border-radius: 5px;
@@ -156,6 +254,7 @@
                     autoLinkButton.style.backgroundColor = '#bceba0';
                     removeCancelButton();
                     enableMainButtons();
+                    highlightAllDifferences();
                     return;
                 }
 
@@ -180,6 +279,8 @@
                         console.log(`MusicBrainz Quick Tools: Could not find the "Next" button for track ${currentIndex + 1}.`);
                     }
 
+                    highlightAllDifferences();
+
                     currentIndex++;
                     processNextTrack();
                 }, 1000);
@@ -198,6 +299,7 @@
                     unlinkButton.style.backgroundColor = '#bceba0';
                     removeCancelButton();
                     enableMainButtons();
+                    highlightAllDifferences();
                     return;
                 }
 
@@ -222,6 +324,8 @@
                         console.log(`MusicBrainz Quick Tools: Could not find the "Next" button for track ${currentIndex + 1}.`);
                     }
 
+                    highlightAllDifferences();
+
                     currentIndex++;
                     processNextTrack();
                 }, 1000);
@@ -243,6 +347,7 @@
                     const isTabActive = mutation.target.getAttribute('aria-hidden') === 'false';
                     if (isTabActive) {
                         addQuickToolsButtons();
+                        highlightAllDifferences();
                     } else {
                         removeQuickToolsButtons();
                     }
@@ -255,6 +360,32 @@
 
         if (recordingsTabContent.getAttribute('aria-hidden') === 'false') {
             addQuickToolsButtons();
+            highlightAllDifferences();
         }
     });
+
+    document.body.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target.classList.contains('edit-track-recording')) {
+            currentTrackRow = target.closest('tr.track');
+        }
+    });
+
+    const recordingPopup = document.getElementById('recording-assoc-bubble');
+    if (recordingPopup) {
+        const popupObserver = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                if (mutation.addedNodes.length || mutation.removedNodes.length) {
+                    if (currentTrackRow) {
+                        setTimeout(() => {
+                           highlightSingleTrack(currentTrackRow);
+                        }, 100);
+                    }
+                }
+            });
+        });
+
+        console.log("MusicBrainz Quick Tools Debug: Initializing MutationObserver on the recording association bubble.");
+        popupObserver.observe(recordingPopup, { childList: true, subtree: true });
+    }
 })();
