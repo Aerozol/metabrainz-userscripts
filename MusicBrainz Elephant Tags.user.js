@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name MusicBrainz Elephant Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @description Adds a button to submit and remember tag strings. Ctrl+click to forget them again.
-// @version 1.0
+// @description  Adds a button to submit and remember tag strings. Ctrl+click to forget them again.
+// @version      1.0
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Elephant%20Tags.user.js
 // @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Elephant%20Tags.user.js
 // @license      MIT
