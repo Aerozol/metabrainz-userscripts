@@ -4,7 +4,7 @@
 // @name         MusicBrainz seed artist relationships from Linktr.ee
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Seed MusicBrainz artist URL relationships from Linktr.ee
-// @author       Gemini
+// @author       Gemini (via loujine)
 // @version      0.7
 // @downloadURL  https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mb-edit-create_from_wikidata.user.js
 // @updateURL    https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mb-edit-create_from_wikidata.user.js
