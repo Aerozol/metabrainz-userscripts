@@ -1,8 +1,11 @@
 // ==UserScript==
 // @name         MusicBrainz Quick Add Medium
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @version      2.2
 // @description  Customizable buttons for adding mediums with specific formats in the release editor
+// @version      2.2
+// @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Add%20Medium.user.js
+// @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Add%20Medium.user.js
+// @license      MIT
 // @author       ChatGPT
 // @match        *://*.musicbrainz.org/release/*/edit*
 // @match        *://*.beta.musicbrainz.org/release/add
