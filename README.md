@@ -89,7 +89,7 @@ Seed MusicBrainz artist URL relationships from Linktr.ee, heavily leaning on lou
   <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source""> 
 </a>
 
-<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20seed%20artist%20relationships%20from%20Linktr__ee.user.js">
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20seed%20artist%20relationships%20from%20Linktr_ee.user.js">
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"">
 </a>
 
