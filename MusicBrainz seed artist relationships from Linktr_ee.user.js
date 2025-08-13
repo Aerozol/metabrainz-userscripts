@@ -3,9 +3,9 @@
 // ==UserScript==
 // @name         MusicBrainz seed artist relationships from Linktr.ee
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @description  Seed MusicBrainz artist URL relationships from Linktr.ee without conflicting with other scripts
+// @description  Seed MusicBrainz artist URL relationships from Linktr.ee
 // @author       Gemini
-// @version      0.9
+// @version      0.7
 // @downloadURL  https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mb-edit-create_from_wikidata.user.js
 // @updateURL    https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mb-edit-create_from_wikidata.user.js
 // @license      MIT
@@ -134,35 +134,24 @@ function fillFormFromLinktree(linktreeURL) {
     if (!helper.isUserLoggedIn()) {
         return false;
     }
-
-    const sideCol = document.getElementById('side-col');
-    if (sideCol) {
-        // Create a unique container for our script's UI to avoid conflicts
-        const linktreeContainer = document.createElement('div');
-        linktreeContainer.id = 'linktree-sidebar-container';
-        sideCol.appendChild(linktreeContainer);
-
-        relEditor.container(linktreeContainer).insertAdjacentHTML(
-            'beforeend', `
-            <h3>Add external link from Linktree</h3>
-            <p>Add a Linktree URL here to retrieve automatically links.</p>
-            <input type="text" id="linktreeParser" value="" placeholder="paste URL here"
-                   style="width: 400px;">
-            <dl id="newFields">
-        `);
-    }
-
+    document.getElementsByClassName('half-width')[0].insertAdjacentHTML(
+        'afterend', '<div id="side-col" style="float: right;"></div>');
+    relEditor.container(document.getElementById('side-col')).insertAdjacentHTML(
+        'beforeend', `
+        <h3>Add external link from Linktree</h3>
+        <p>Add a Linktree URL here to retrieve automatically links.</p>
+        <input type="text" id="linktreeParser" value="" placeholder="paste URL here"
+               style="width: 400px;">
+        <dl id="newFields">
+    `);
+    document.getElementById('loujine-menu').style.marginLeft = '550px';
 })();
 
 $(document).ready(function () {
     if (!helper.isUserLoggedIn()) {
         return false;
     }
-    const node = document.getElementById('linktreeParser'); // Changed ID to linktreeParser
-    if (!node) {
-        // Our UI wasn't added, likely due to a conflict or missing sidebar
-        return false;
-    }
+    const node = document.getElementById('linktreeParser');
     node.addEventListener('input', () => {
         node.value = node.value.trim();
         if (!node.value) {
