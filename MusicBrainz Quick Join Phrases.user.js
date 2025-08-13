@@ -2,7 +2,10 @@
 // @name         MusicBrainz Quick Join Phrases
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Click to add common join phrases (release editor)
-// @version      2025-07-10.6
+// @version      1
+// @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Join%20Phrases.user.js
+// @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Join%20Phrases.user.js
+// @license      MIT
 // @author       ChatGPT
 // @match        *://*.musicbrainz.org/release/add*
 // @match        *://*.musicbrainz.org/release/*/edit*
