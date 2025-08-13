@@ -3,10 +3,10 @@
 // @namespace   https://github.com/Aerozol/metabrainz-userscripts
 // @description Select the first recording search result for each track, in the release editor Recordings tab.
 // @version     5.16
-// @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
-// @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
-// @license      MIT
-// @author      Gemini
+// @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
+// @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
+// @license     MIT
+// @author      Google Gemini
 // @match       *://*.musicbrainz.org/release/*/edit*
 // @match       *://*.beta.musicbrainz.org/release/add*
 // @grant       none
