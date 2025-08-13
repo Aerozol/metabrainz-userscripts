@@ -49,7 +49,7 @@ Adds a number of shortcuts that will fill some common join phrases into the seco
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
-### <a name="musicbrainz_quick_join_phrases"></a> MusicBrainz Quick Recording Match
+### <a name="musicbrainz_quick_recording_links"></a> MusicBrainz Quick Recording Match
 
 Adds buttons to the release editor "Recordings" tab to select the first recording search result for each track, and to unset all recordingsd. Works!
 
@@ -78,5 +78,21 @@ Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probab
 </a>
 
 <a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/rym_link_checker.png" target="_blank">
+  <img src="https://raw.githubusercontent.com/Aerozol/Dump/refs/heads/main/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
+### <a name="musicbrainz_seed_artist_relationships_from_linktree"></a> MusicBrainz seed artist relationships from Linktr.ee
+
+Seed MusicBrainz artist URL relationships from Linktr.ee, heavily leaning on loujine's [create entity/fill data from wikidata/wikipedia/ISNI/VIAF script](https://github.com/loujine/musicbrainz-scripts/blob/master/mb-edit-create_from_wikidata.user.js). Works.
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20seed%20artist%20relationships%20from%20link_tree.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source""> 
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20seed%20artist%20relationships%20from%20link_tree.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"">
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/seed_relationships_from_linktree.png" target="_blank">
   <img src="https://raw.githubusercontent.com/Aerozol/Dump/refs/heads/main/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
