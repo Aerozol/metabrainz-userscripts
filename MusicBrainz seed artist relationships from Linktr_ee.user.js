@@ -6,8 +6,8 @@
 // @description  Seed MusicBrainz artist URL relationships from Linktr.ee
 // @author       Gemini (thanks to loujine's scripts)
 // @version      0.7
-// @downloadURL  https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mb-edit-create_from_wikidata.user.js
-// @updateURL    https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mb-edit-create_from_wikidata.user.js
+// @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20seed%20artist%20relationships%20from%20Linktr_ee.user.js
+// @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20seed%20artist%20relationships%20from%20Linktr_ee.user.js
 // @license      MIT
 // @require      https://raw.githubusercontent.com/loujine/musicbrainz-scripts/master/mbz-loujine-common.js
 // @include      http*://*musicbrainz.org/artist/*/edit
