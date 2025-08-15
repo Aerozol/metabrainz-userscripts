@@ -8,7 +8,7 @@
 // @license     MIT
 // @author      Google Gemini
 // @match       *://*.musicbrainz.org/release/*/edit*
-// @match       *://*.beta.musicbrainz.org/release/add*
+// @match       *://*.musicbrainz.org/release/add*
 // @grant       none
 // @run-at      document-idle
 // ==/UserScript==
