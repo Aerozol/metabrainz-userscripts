@@ -16,24 +16,8 @@
 
 (function () {
   const MB_API = "https://musicbrainz.org/ws/2/"
-  const DEBUG = true
   const REQUEST_DELAY = 1100 // 1.1 seconds between requests to respect MB rate limit
   const MAX_SEARCH_RESULTS = 5 // Check up to 5 results for matches
-
-  // Enhanced logging
-  const LOGGER =
-    typeof window.LOGGER !== "undefined"
-      ? window.LOGGER
-      : {
-          debug: DEBUG ? console.log.bind(console, "[MB-DEBUG]") : () => {},
-          info: console.log.bind(console, "[MB-INFO]"),
-          error: console.error.bind(console, "[MB-ERROR]"),
-          setLevel: () => {},
-        }
-
-  if (DEBUG) {
-    LOGGER.setLevel("debug")
-  }
 
   // Enhanced caching system
   class EnhancedMBCache {
@@ -51,10 +35,10 @@
         if (stored) {
           const data = JSON.parse(stored)
           this.cache = new Map(Object.entries(data))
-          LOGGER.debug("Loaded cache from storage:", this.cache.size, "entries")
+          console.debug("Loaded cache from storage:", this.cache.size, "entries")
         }
       } catch (e) {
-        LOGGER.error("Failed to load cache from storage:", e)
+        console.error("Failed to load cache from storage:", e)
       }
     }
 
@@ -62,9 +46,9 @@
       try {
         const data = Object.fromEntries(this.cache)
         localStorage.setItem(`${this.name}_v${this.version}`, JSON.stringify(data))
-        LOGGER.debug("Saved cache to storage:", this.cache.size, "entries")
+        console.debug("Saved cache to storage:", this.cache.size, "entries")
       } catch (e) {
-        LOGGER.error("Failed to save cache to storage:", e)
+        console.error("Failed to save cache to storage:", e)
       }
     }
 
@@ -109,7 +93,7 @@
 
       return urlObj.href
     } catch (e) {
-      LOGGER.error("Failed to normalize URL:", url, e)
+      console.error("Failed to normalize URL:", url, e)
       return url
     }
   }
@@ -126,7 +110,7 @@
         return normalizeRYMUrl(fullUrl)
       }
     } catch (e) {
-      LOGGER.error("Failed to get artist RYM URL:", e)
+      console.error("Failed to get artist RYM URL:", e)
     }
     return getCurrentRYMUrl() // fallback
   }
@@ -139,7 +123,7 @@
         return normalizeRYMUrl(fullUrl)
       }
     } catch (e) {
-      LOGGER.error("Failed to get release RYM URL:", e)
+      console.error("Failed to get release RYM URL:", e)
     }
     return null
   }
@@ -179,7 +163,7 @@
 
     // Check cache first
     if (mbCache.has(cacheKey)) {
-      LOGGER.debug("Using cached result for", entityType, searchTerm)
+      console.debug("Using cached result for", entityType, searchTerm)
       const result = mbCache.get(cacheKey)
       callback(result.found, result.mbUrl, result.mbid)
       return
@@ -187,7 +171,7 @@
 
     // Check if request is already pending
     if (mbCache.pendingRequests.has(cacheKey)) {
-      LOGGER.debug("Request already pending for", entityType, searchTerm)
+      console.debug("Request already pending for", entityType, searchTerm)
       mbCache.pendingRequests.get(cacheKey).push(callback)
       return
     }
@@ -220,17 +204,17 @@
 
   function searchWithStrategies(entityType, strategies, rymUrl, strategyIndex, callback) {
     if (strategyIndex >= strategies.length) {
-      LOGGER.debug("All search strategies exhausted for", entityType)
+      console.debug("All search strategies exhausted for", entityType)
       callback(false, null, null)
       return
     }
 
     const searchTerm = strategies[strategyIndex]
-    LOGGER.debug(`Trying search strategy ${strategyIndex + 1}/${strategies.length} for ${entityType}: "${searchTerm}"`)
+    console.debug(`Trying search strategy ${strategyIndex + 1}/${strategies.length} for ${entityType}: "${searchTerm}"`)
 
     queueRequest(() => {
       const searchUrl = `${MB_API}${entityType}/?query=${encodeURIComponent(searchTerm)}&fmt=json&limit=${MAX_SEARCH_RESULTS}`
-      LOGGER.debug("Searching MusicBrainz:", searchUrl)
+      console.debug("Searching MusicBrainz:", searchUrl)
 
       GM_xmlhttpRequest({
         method: "GET",
@@ -242,28 +226,28 @@
             const results = data[entityKey] || []
 
             if (results.length === 0) {
-              LOGGER.debug(`No results for strategy ${strategyIndex + 1}, trying next strategy`)
+              console.debug(`No results for strategy ${strategyIndex + 1}, trying next strategy`)
               searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
               return
             }
 
-            LOGGER.debug(`Found ${results.length} results for strategy ${strategyIndex + 1}, checking for RYM links`)
+            console.debug(`Found ${results.length} results for strategy ${strategyIndex + 1}, checking for RYM links`)
             checkMultipleResultsForRYMLink(entityType, results, rymUrl, 0, (found, mbUrl, mbid) => {
               if (found) {
-                LOGGER.info(`Found matching RYM link using strategy ${strategyIndex + 1}!`)
+                console.info(`Found matching RYM link using strategy ${strategyIndex + 1}!`)
                 callback(found, mbUrl, mbid)
               } else {
-                LOGGER.debug(`No RYM link found with strategy ${strategyIndex + 1}, trying next strategy`)
+                console.debug(`No RYM link found with strategy ${strategyIndex + 1}, trying next strategy`)
                 searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
               }
             })
           } catch (e) {
-            LOGGER.error("Error parsing search response:", e)
+            console.error("Error parsing search response:", e)
             searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
           }
         },
         onerror: (error) => {
-          LOGGER.error("Search request failed:", error)
+          console.error("Search request failed:", error)
           searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
         },
       })
@@ -272,7 +256,7 @@
 
   function checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex, callback) {
     if (resultIndex >= results.length || resultIndex >= MAX_SEARCH_RESULTS) {
-      LOGGER.debug("No matching RYM relationship found in any results")
+      console.debug("No matching RYM relationship found in any results")
       callback(false, null, null)
       return
     }
@@ -281,7 +265,7 @@
     const mbid = match.id
     const mbUrl = `https://musicbrainz.org/${entityType}/${mbid}`
 
-    LOGGER.debug(
+    console.debug(
       `Checking result ${resultIndex + 1}/${Math.min(results.length, MAX_SEARCH_RESULTS)}: ${match.name || match.title}`,
     )
 
@@ -311,19 +295,19 @@
             })
 
             if (hasRym) {
-              LOGGER.info(`Found matching RYM relationship in result ${resultIndex + 1}!`)
+              console.info(`Found matching RYM relationship in result ${resultIndex + 1}!`)
               callback(true, mbUrl, mbid)
             } else {
               // Try next result
               checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
             }
           } catch (e) {
-            LOGGER.error("Error parsing entity details:", e)
+            console.error("Error parsing entity details:", e)
             checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
           }
         },
         onerror: (error) => {
-          LOGGER.error("Detail request failed:", error)
+          console.error("Detail request failed:", error)
           checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
         },
       })
@@ -411,13 +395,13 @@
   function checkReleaseGroup() {
     const albumTitleDiv = document.querySelector(".album_title")
     if (!albumTitleDiv) {
-      LOGGER.debug("No album title found")
+      console.debug("No album title found")
       return
     }
 
     const titleText = albumTitleDiv.childNodes[0]?.textContent?.trim()
     if (!titleText) {
-      LOGGER.debug("Could not extract album title text")
+      console.debug("Could not extract album title text")
       return
     }
 
@@ -425,11 +409,11 @@
     const albumTitle = titleText.replace(/\s+\d{4}\s*$/, "").trim() // Remove year at the end
 
     if (!albumTitle) {
-      LOGGER.debug("Could not extract album title")
+      console.debug("Could not extract album title")
       return
     }
 
-    LOGGER.info("Checking release group:", albumTitle)
+    console.info("Checking release group:", albumTitle)
 
     const loadingIcon = createLoadingIcon()
     albumTitleDiv.appendChild(loadingIcon)
@@ -445,12 +429,12 @@
   function checkRelease() {
     const titleElem = document.querySelector("h1.entity_title")
     if (!titleElem) {
-      LOGGER.debug("No release title found")
+      console.debug("No release title found")
       return
     }
 
     const releaseTitle = titleElem.textContent.trim()
-    LOGGER.info("Checking release:", releaseTitle)
+    console.info("Checking release:", releaseTitle)
 
     const loadingIcon = createLoadingIcon()
     titleElem.appendChild(loadingIcon)
@@ -471,13 +455,13 @@
         const name = artistLink.textContent.trim()
 
         if (name === "Various Artists") {
-          LOGGER.debug("Main artist is Various Artists - showing not applicable icon")
+          console.debug("Main artist is Various Artists - showing not applicable icon")
           artistLink.appendChild(createNotApplicableIcon("special artist entity"))
           return
         }
 
         const artistRymUrl = getArtistRYMUrl(artistLink)
-        LOGGER.info("Checking main artist:", name, "against URL:", artistRymUrl)
+        console.info("Checking main artist:", name, "against URL:", artistRymUrl)
 
         const loadingIcon = createLoadingIcon()
         artistLink.appendChild(loadingIcon)
@@ -499,7 +483,7 @@
         const name = link.textContent.trim()
         if (!name) return
 
-        LOGGER.debug("Classifier:", name, "- showing not applicable icon")
+        console.debug("Classifier:", name, "- showing not applicable icon")
         link.appendChild(createNotApplicableIcon("classifiers not supported"))
       })
     }
@@ -513,7 +497,7 @@
         const name = link.textContent.trim()
         if (!name) return
 
-        LOGGER.info("Checking label:", name)
+        console.info("Checking label:", name)
 
         const loadingIcon = createLoadingIcon()
         link.appendChild(loadingIcon)
@@ -535,7 +519,7 @@
       if (!name) return
 
       const artistRymUrl = getArtistRYMUrl(link)
-      LOGGER.info("Checking featured artist:", name, "against URL:", artistRymUrl)
+      console.info("Checking featured artist:", name, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
@@ -551,7 +535,7 @@
   function checkArtists(selector, label) {
     const artists = document.querySelectorAll(selector)
     if (artists.length === 0) {
-      LOGGER.debug(`No ${label} artists found for selector: ${selector}`)
+      console.debug(`No ${label} artists found for selector: ${selector}`)
       return
     }
 
@@ -560,7 +544,7 @@
       if (!name) return
 
       const artistRymUrl = getArtistRYMUrl(link)
-      LOGGER.info(`Checking ${label} artist:`, name, "against URL:", artistRymUrl)
+      console.info(`Checking ${label} artist:`, name, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
@@ -577,23 +561,23 @@
   function checkArtistPageName() {
     const artistNameDiv = document.querySelector(".artist_name")
     if (!artistNameDiv) {
-      LOGGER.debug("No artist name div found")
+      console.debug("No artist name div found")
       return
     }
 
     const artistNameHeader = artistNameDiv.querySelector("h1.artist_name_hdr")
     if (!artistNameHeader) {
-      LOGGER.debug("No artist name header found")
+      console.debug("No artist name header found")
       return
     }
 
     const artistName = artistNameHeader.textContent.trim()
     if (!artistName) {
-      LOGGER.debug("Could not extract artist name")
+      console.debug("Could not extract artist name")
       return
     }
 
-    LOGGER.info("Checking artist page name:", artistName)
+    console.info("Checking artist page name:", artistName)
 
     const loadingIcon = createLoadingIcon()
     artistNameHeader.appendChild(loadingIcon)
@@ -609,13 +593,13 @@
   function checkDiscographyReleases() {
     const discographyDiv = document.querySelector(".section_artist_discography")
     if (!discographyDiv) {
-      LOGGER.debug("No discography section found")
+      console.debug("No discography section found")
       return
     }
 
     // Find all release links in the discography
     const releaseLinks = discographyDiv.querySelectorAll(".disco_mainline a.album")
-    LOGGER.info(`Found ${releaseLinks.length} releases in discography`)
+    console.info(`Found ${releaseLinks.length} releases in discography`)
 
     releaseLinks.forEach((link) => {
       const releaseTitle = link.textContent.trim()
@@ -623,11 +607,11 @@
 
       const releaseRymUrl = getReleaseRYMUrl(link)
       if (!releaseRymUrl) {
-        LOGGER.debug("Could not get RYM URL for release:", releaseTitle)
+        console.debug("Could not get RYM URL for release:", releaseTitle)
         return
       }
 
-      LOGGER.info("Checking discography release:", releaseTitle, "against URL:", releaseRymUrl)
+      console.info("Checking discography release:", releaseTitle, "against URL:", releaseRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
@@ -645,23 +629,23 @@
   function checkLabelPageName() {
     const labelNameDiv = document.querySelector(".page_company_music_section_name_inner")
     if (!labelNameDiv) {
-      LOGGER.debug("No label name div found")
+      console.debug("No label name div found")
       return
     }
 
     const labelNameHeader = labelNameDiv.querySelector("h1")
     if (!labelNameHeader) {
-      LOGGER.debug("No label name header found")
+      console.debug("No label name header found")
       return
     }
 
     const labelName = labelNameHeader.textContent.trim()
     if (!labelName) {
-      LOGGER.debug("Could not extract label name")
+      console.debug("Could not extract label name")
       return
     }
 
-    LOGGER.info("Checking label page name:", labelName)
+    console.info("Checking label page name:", labelName)
 
     const loadingIcon = createLoadingIcon()
     labelNameHeader.appendChild(loadingIcon)
@@ -677,13 +661,13 @@
   function checkLabelDiscographyReleases() {
     const discographyDiv = document.querySelector("#component_discography_items_frame")
     if (!discographyDiv) {
-      LOGGER.debug("No label discography section found")
+      console.debug("No label discography section found")
       return
     }
 
     // Find all release links in the label discography
     const releaseLinks = discographyDiv.querySelectorAll(".component_discography_item_link.release")
-    LOGGER.info(`Found ${releaseLinks.length} releases in label discography`)
+    console.info(`Found ${releaseLinks.length} releases in label discography`)
 
     releaseLinks.forEach((link) => {
       const releaseTitle = link.textContent.trim()
@@ -691,11 +675,11 @@
 
       const releaseRymUrl = getReleaseRYMUrl(link)
       if (!releaseRymUrl) {
-        LOGGER.debug("Could not get RYM URL for release:", releaseTitle)
+        console.debug("Could not get RYM URL for release:", releaseTitle)
         return
       }
 
-      LOGGER.info("Checking label discography release:", releaseTitle, "against URL:", releaseRymUrl)
+      console.info("Checking label discography release:", releaseTitle, "against URL:", releaseRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
@@ -712,20 +696,20 @@
   function checkLabelDiscographyArtists() {
     const discographyDiv = document.querySelector("#component_discography_items_frame")
     if (!discographyDiv) {
-      LOGGER.debug("No label discography section found")
+      console.debug("No label discography section found")
       return
     }
 
     // Find all artist links in the label discography
     const artistLinks = discographyDiv.querySelectorAll("a.artist")
-    LOGGER.info(`Found ${artistLinks.length} artists in label discography`)
+    console.info(`Found ${artistLinks.length} artists in label discography`)
 
     artistLinks.forEach((link) => {
       const artistName = link.textContent.trim()
       if (!artistName) return
 
       const artistRymUrl = getArtistRYMUrl(link)
-      LOGGER.info("Checking label discography artist:", artistName, "against URL:", artistRymUrl)
+      console.info("Checking label discography artist:", artistName, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
@@ -740,7 +724,7 @@
 
   // Main run functions
   function runReleasePageChecks() {
-    LOGGER.info("Starting enhanced RYM-MusicBrainz checker for release page...")
+    console.info("Starting enhanced RYM-MusicBrainz checker for release page...")
 
     checkReleaseGroup()
     checkRelease()
@@ -751,26 +735,26 @@
     checkArtists(".release_pri_artists a", "primary")
     checkArtists(".tracklist_line a.artist", "tracklist")
 
-    LOGGER.info("All release page checks initiated")
+    console.info("All release page checks initiated")
   }
 
   function runArtistPageChecks() {
-    LOGGER.info("Starting enhanced RYM-MusicBrainz checker for artist page...")
+    console.info("Starting enhanced RYM-MusicBrainz checker for artist page...")
 
     checkArtistPageName()
     checkDiscographyReleases()
 
-    LOGGER.info("All artist page checks initiated")
+    console.info("All artist page checks initiated")
   }
 
   function runLabelPageChecks() {
-    LOGGER.info("Starting enhanced RYM-MusicBrainz checker for label page...")
+    console.info("Starting enhanced RYM-MusicBrainz checker for label page...")
 
     checkLabelPageName()
     checkLabelDiscographyReleases()
     checkLabelDiscographyArtists()
 
-    LOGGER.info("All label page checks initiated")
+    console.info("All label page checks initiated")
   }
 
   function run() {
@@ -781,7 +765,7 @@
     } else if (isLabelPage()) {
       runLabelPageChecks()
     } else {
-      LOGGER.debug("Unknown page type, skipping checks")
+      console.debug("Unknown page type, skipping checks")
     }
   }
 
