@@ -191,7 +191,7 @@
     // Remove duplicates
     const uniqueStrategies = [...new Set(searchStrategies)]
 
-    searchWithStrategies(entityType, uniqueStrategies, rymUrl, 0, (found, mbUrl, mbid) => {
+    lookupURL(entityType, rymUrl, (found, mbUrl, mbid)=> {
       const result = { found, mbUrl, mbid }
       mbCache.set(cacheKey, result)
 
@@ -199,6 +199,42 @@
       const callbacks = mbCache.pendingRequests.get(cacheKey) || []
       mbCache.pendingRequests.delete(cacheKey)
       callbacks.forEach((cb) => cb(found, mbUrl, mbid))
+    })
+  }
+
+  function lookupURL(entityType, url, callback){
+    queueRequest(() => {
+      console.log(`${MB_API}url?resource=${url}&fmt=json&inc=${entityType}-rels`);
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: `${MB_API}url?resource=${url}&fmt=json&inc=${entityType}-rels`,
+        onload: (response) => {
+          try {
+            let found = false;
+            const data = JSON.parse(response.responseText);
+            console.log(data);
+            if(!data.error){
+              for(const rel of data.relations){
+                if(rel["target-type"] == entityType){
+                  found = true;
+                  console.log(rel[entityType]);
+                  callback(true, `https://musicbrainz.org/${entityType}/${rel[entityType].id}`, rel[entityType].id);
+                }
+              }
+            }
+            if(!found){
+              callback(false, null, null);
+            }
+          } catch (error) {
+            console.error(error);
+            callback(false, null, null);
+          }
+        },
+        onerror: (response) => {
+          console.error(response);
+          callback(false, null, null);
+        }
+      })
     })
   }
 
