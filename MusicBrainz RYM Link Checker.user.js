@@ -10,15 +10,11 @@
 // @match        https://rateyourmusic.com/release/*
 // @match        https://rateyourmusic.com/artist/*
 // @match        https://rateyourmusic.com/label/*
-// @require      https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js
-// @require      https://github.com/murdos/musicbrainz-userscripts/raw/refs/heads/master/lib/logger.js
 // @grant        GM_xmlhttpRequest
 // @connect      musicbrainz.org
 // ==/UserScript==
 
-// prevent JQuery conflicts
-this.$ = this.jQuery = jQuery.noConflict(true)
-;(() => {
+(function () {
   const MB_API = "https://musicbrainz.org/ws/2/"
   const DEBUG = true
   const REQUEST_DELAY = 1100 // 1.1 seconds between requests to respect MB rate limit
@@ -791,4 +787,4 @@ this.$ = this.jQuery = jQuery.noConflict(true)
 
   // Wait for page to load, then run
   setTimeout(run, 1500)
-})()
+})();
