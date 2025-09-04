@@ -17,57 +17,6 @@
 (function () {
   const MB_API = "https://musicbrainz.org/ws/2/"
   const REQUEST_DELAY = 1100 // 1.1 seconds between requests to respect MB rate limit
-  const MAX_SEARCH_RESULTS = 5 // Check up to 5 results for matches
-
-  // Enhanced caching system
-  class EnhancedMBCache {
-    constructor(name, version) {
-      this.name = name
-      this.version = version
-      this.cache = new Map()
-      this.pendingRequests = new Map()
-      this.loadFromStorage()
-    }
-
-    loadFromStorage() {
-      try {
-        const stored = localStorage.getItem(`${this.name}_v${this.version}`)
-        if (stored) {
-          const data = JSON.parse(stored)
-          this.cache = new Map(Object.entries(data))
-          console.debug("Loaded cache from storage:", this.cache.size, "entries")
-        }
-      } catch (e) {
-        console.error("Failed to load cache from storage:", e)
-      }
-    }
-
-    saveToStorage() {
-      try {
-        const data = Object.fromEntries(this.cache)
-        localStorage.setItem(`${this.name}_v${this.version}`, JSON.stringify(data))
-        console.debug("Saved cache to storage:", this.cache.size, "entries")
-      } catch (e) {
-        console.error("Failed to save cache to storage:", e)
-      }
-    }
-
-    get(key) {
-      return this.cache.get(key)
-    }
-
-    set(key, value) {
-      this.cache.set(key, value)
-      this.saveToStorage()
-    }
-
-    has(key) {
-      return this.cache.has(key)
-    }
-  }
-
-  // Initialize enhanced cache
-  const mbCache = new EnhancedMBCache("RYM_MBLINKS_CACHE", "3")
 
   // Request queue for rate limiting
   const requestQueue = []
@@ -75,7 +24,9 @@
 
   // URL normalization functions
   function normalizeRYMUrl(url) {
-    if (!url) return null
+    if (!url){
+      return  null;
+    }
 
     try {
       // Remove query parameters and fragments
@@ -85,7 +36,7 @@
       cleanUrl = cleanUrl.replace(/^http:/, "https:")
 
       // Remove trailing slash
-      cleanUrl = cleanUrl.replace(/\/$/, "")
+      // cleanUrl = cleanUrl.replace(/\/$/, "")
 
       // Normalize case for path components (but preserve domain case)
       const urlObj = new URL(cleanUrl)
@@ -157,49 +108,8 @@
     processRequestQueue()
   }
 
-  // Enhanced MusicBrainz search with multiple strategies
-  function searchMusicBrainzEntity(entityType, searchTerm, rymUrl, callback) {
-    const cacheKey = `${entityType}:${searchTerm}:${rymUrl}`
-
-    // Check cache first
-    if (mbCache.has(cacheKey)) {
-      console.debug("Using cached result for", entityType, searchTerm)
-      const result = mbCache.get(cacheKey)
-      callback(result.found, result.mbUrl, result.mbid)
-      return
-    }
-
-    // Check if request is already pending
-    if (mbCache.pendingRequests.has(cacheKey)) {
-      console.debug("Request already pending for", entityType, searchTerm)
-      mbCache.pendingRequests.get(cacheKey).push(callback)
-      return
-    }
-
-    // Create new pending request
-    mbCache.pendingRequests.set(cacheKey, [callback])
-
-    // Multiple search strategies
-    const searchStrategies = [
-      searchTerm, // exact search
-      searchTerm.replace(/[^\w\s]/g, ""), // remove special characters
-      searchTerm
-        .replace(/\s+/g, " ")
-        .trim(), // normalize whitespace
-    ]
-
-    // Remove duplicates
-    const uniqueStrategies = [...new Set(searchStrategies)]
-
-    lookupURL(entityType, rymUrl, (found, mbUrl, mbid)=> {
-      const result = { found, mbUrl, mbid }
-      mbCache.set(cacheKey, result)
-
-      // Call all pending callbacks
-      const callbacks = mbCache.pendingRequests.get(cacheKey) || []
-      mbCache.pendingRequests.delete(cacheKey)
-      callbacks.forEach((cb) => cb(found, mbUrl, mbid))
-    })
+  function createMBzUrl(entityType, mbid){
+    return `https://musicbrainz.org/${entityType}/${mbid}`;
   }
 
   function lookupURL(entityType, url, callback){
@@ -210,159 +120,55 @@
         url: `${MB_API}url?resource=${url}&fmt=json&inc=${entityType}-rels`,
         onload: (response) => {
           try {
-            let found = false;
             const data = JSON.parse(response.responseText);
             console.log(data);
             if(!data.error){
-              for(const rel of data.relations){
-                if(rel["target-type"] == entityType){
-                  found = true;
-                  console.log(rel[entityType]);
-                  callback(true, `https://musicbrainz.org/${entityType}/${rel[entityType].id}`, rel[entityType].id);
-                }
-              }
-            }
-            if(!found){
-              callback(false, null, null);
+              const results = data.relations
+                .map((rel) => {
+                  if(rel["target-type"] == "release_group"){
+                    rel["target-type"] = "release-group";
+                    rel["release-group"] = rel["release_group"];
+                  }
+                  return rel;
+                })
+                .filter((rel) => rel["target-type"] == entityType)
+                .map((rel) => {
+                  return {
+                    type: entityType,
+                    id: rel[entityType].id,
+                    url: url,
+                  }});
+              callback(results);
+            }else{
+              callback([]);
             }
           } catch (error) {
             console.error(error);
-            callback(false, null, null);
+            callback([]);
           }
         },
         onerror: (response) => {
           console.error(response);
-          callback(false, null, null);
+          callback([]);
         }
-      })
-    })
-  }
-
-  function searchWithStrategies(entityType, strategies, rymUrl, strategyIndex, callback) {
-    if (strategyIndex >= strategies.length) {
-      console.debug("All search strategies exhausted for", entityType)
-      callback(false, null, null)
-      return
-    }
-
-    const searchTerm = strategies[strategyIndex]
-    console.debug(`Trying search strategy ${strategyIndex + 1}/${strategies.length} for ${entityType}: "${searchTerm}"`)
-
-    queueRequest(() => {
-      const searchUrl = `${MB_API}${entityType}/?query=${encodeURIComponent(searchTerm)}&fmt=json&limit=${MAX_SEARCH_RESULTS}`
-      console.debug("Searching MusicBrainz:", searchUrl)
-
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: searchUrl,
-        onload: (response) => {
-          try {
-            const data = JSON.parse(response.responseText)
-            const entityKey = entityType === "release-group" ? "release-groups" : `${entityType}s`
-            const results = data[entityKey] || []
-
-            if (results.length === 0) {
-              console.debug(`No results for strategy ${strategyIndex + 1}, trying next strategy`)
-              searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-              return
-            }
-
-            console.debug(`Found ${results.length} results for strategy ${strategyIndex + 1}, checking for RYM links`)
-            checkMultipleResultsForRYMLink(entityType, results, rymUrl, 0, (found, mbUrl, mbid) => {
-              if (found) {
-                console.info(`Found matching RYM link using strategy ${strategyIndex + 1}!`)
-                callback(found, mbUrl, mbid)
-              } else {
-                console.debug(`No RYM link found with strategy ${strategyIndex + 1}, trying next strategy`)
-                searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-              }
-            })
-          } catch (e) {
-            console.error("Error parsing search response:", e)
-            searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-          }
-        },
-        onerror: (error) => {
-          console.error("Search request failed:", error)
-          searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-        },
-      })
-    })
-  }
-
-  function checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex, callback) {
-    if (resultIndex >= results.length || resultIndex >= MAX_SEARCH_RESULTS) {
-      console.debug("No matching RYM relationship found in any results")
-      callback(false, null, null)
-      return
-    }
-
-    const match = results[resultIndex]
-    const mbid = match.id
-    const mbUrl = `https://musicbrainz.org/${entityType}/${mbid}`
-
-    console.debug(
-      `Checking result ${resultIndex + 1}/${Math.min(results.length, MAX_SEARCH_RESULTS)}: ${match.name || match.title}`,
-    )
-
-    queueRequest(() => {
-      const detailUrl = `${MB_API}${entityType}/${mbid}?inc=url-rels&fmt=json`
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: detailUrl,
-        onload: (detailResponse) => {
-          try {
-            const details = JSON.parse(detailResponse.responseText)
-            const urls = details.relations || []
-
-            // Enhanced URL matching with multiple normalization strategies
-            const hasRym = urls.some((rel) => {
-              if (!rel.url || !rel.url.resource) return false
-
-              const mbRymUrl = normalizeRYMUrl(rel.url.resource)
-              const targetRymUrl = normalizeRYMUrl(rymUrl)
-
-              // Try multiple matching strategies
-              return (
-                mbRymUrl === targetRymUrl ||
-                mbRymUrl.toLowerCase() === targetRymUrl.toLowerCase() ||
-                mbRymUrl.replace(/\/$/, "") === targetRymUrl.replace(/\/$/, "")
-              )
-            })
-
-            if (hasRym) {
-              console.info(`Found matching RYM relationship in result ${resultIndex + 1}!`)
-              callback(true, mbUrl, mbid)
-            } else {
-              // Try next result
-              checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
-            }
-          } catch (e) {
-            console.error("Error parsing entity details:", e)
-            checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
-          }
-        },
-        onerror: (error) => {
-          console.error("Detail request failed:", error)
-          checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
-        },
       })
     })
   }
 
   // UI creation functions
   function createLoadingIcon() {
-    const a = document.createElement("a")
-    a.textContent = " ⏳"
-    a.title = "Searching MusicBrainz..."
-    a.style.marginLeft = "0.25em"
-    a.style.textDecoration = "none"
-    a.style.fontSize = "0.9em"
-    a.style.color = "#666"
-    return a
+    const a = document.createElement("a");
+    a.className = "RYM-Link-Checker-Loading-Icon";
+    a.textContent = " ⏳";
+    a.title = "Searching MusicBrainz...";
+    a.style.marginLeft = "0.25em";
+    a.style.textDecoration = "none";
+    a.style.fontSize = "0.9em";
+    return a;
   }
 
-  function createIconWithClick(found, mbUrl, mbid, name, rymUrl, isArtist = false, entityType = "artist") {
+  function createIconWithClick(found, mbUrl, mbid, name, rymUrl, entityType) {
+    const isArtist = (entityType == "artist");
     const a = document.createElement("a")
     a.textContent = found ? " ✅" : " ❌"
     a.title = found
@@ -373,27 +179,13 @@
     a.style.marginLeft = "0.25em"
     a.style.textDecoration = "none"
     a.style.fontSize = "0.9em"
-    a.style.color = found ? "green" : "gray"
     a.target = "_blank"
 
     if (found) {
       if (mbUrl) a.href = mbUrl
     } else {
       if (isArtist && mbUrl) {
-        a.href = "javascript:void(0)"
-        a.style.cursor = "pointer"
-        a.addEventListener("click", (e) => {
-          e.preventDefault()
-          const mbArtistEditUrl = mbUrl + "/edit"
-          const win = window.open(mbArtistEditUrl, "_blank")
-          if (win) {
-            win.focus()
-          } else {
-            alert(
-              `Popup blocked! Please open manually:\n${mbArtistEditUrl}\n\nAnd add this URL as an external link:\n${rymUrl}`,
-            )
-          }
-        })
+        // TODO seed rymUrl
       } else {
         // For others, link to search
         const searchType = entityType === "release-group" ? "release_group" : entityType
@@ -427,6 +219,21 @@
     return window.location.pathname.includes("/label/")
   }
 
+  function handleCallback (element, name){
+    return (results) => {
+      element.removeChild(element.querySelector(".RYM-Link-Checker-Loading-Icon"));
+      if(results.length > 0){
+        for(const result of results){
+          const icon = createIconWithClick(true, createMBzUrl(result.type, result.id), results.id, name, result.url, result.type);
+          element.appendChild(icon);
+        }
+      }else{
+        const icon = createIconWithClick(false, null, null, name, null, null);
+        element.appendChild(icon);
+      }
+    }
+  }
+
   // Release page functions (existing)
   function checkReleaseGroup() {
     const albumTitleDiv = document.querySelector(".album_title")
@@ -455,11 +262,7 @@
     albumTitleDiv.appendChild(loadingIcon)
 
     const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("release-group", albumTitle, currentUrl, (found, mbUrl, mbid) => {
-      albumTitleDiv.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, albumTitle, currentUrl, false, "release-group")
-      albumTitleDiv.appendChild(icon)
-    })
+    lookupURL("release-group", currentUrl, handleCallback(albumTitleDiv, albumTitle));
   }
 
   function checkRelease() {
@@ -476,11 +279,7 @@
     titleElem.appendChild(loadingIcon)
 
     const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("release", releaseTitle, currentUrl, (found, mbUrl, mbid) => {
-      titleElem.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, releaseTitle, currentUrl, false, "release")
-      titleElem.appendChild(icon)
-    })
+    lookupURL("release", currentUrl, handleCallback(titleElem, releaseTitle));
   }
 
   function checkMainArtist() {
@@ -502,11 +301,7 @@
         const loadingIcon = createLoadingIcon()
         artistLink.appendChild(loadingIcon)
 
-        searchMusicBrainzEntity("artist", name, artistRymUrl, (found, mbUrl, mbid) => {
-          artistLink.removeChild(loadingIcon)
-          const icon = createIconWithClick(found, mbUrl, mbid, name, artistRymUrl, true, "artist")
-          artistLink.appendChild(icon)
-        })
+        lookupURL("artist", artistRymUrl, handleCallback(artistLink, name));
       }
     }
   }
@@ -539,11 +334,7 @@
         link.appendChild(loadingIcon)
 
         const currentUrl = getCurrentRYMUrl()
-        searchMusicBrainzEntity("label", name, currentUrl, (found, mbUrl, mbid) => {
-          link.removeChild(loadingIcon)
-          const icon = createIconWithClick(found, mbUrl, mbid, name, currentUrl, false, "label")
-          link.appendChild(icon)
-        })
+        lookupURL("label", currentUrl, handleCallback(link, name));
       })
     }
   }
@@ -560,11 +351,7 @@
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      searchMusicBrainzEntity("artist", name, artistRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, name, artistRymUrl, true, "artist")
-        link.appendChild(icon)
-      })
+      lookupURL("artist", artistRymUrl, handleCallback(link, name));
     })
   }
 
@@ -585,11 +372,7 @@
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      searchMusicBrainzEntity("artist", name, artistRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, name, artistRymUrl, true, "artist")
-        link.appendChild(icon)
-      })
+      lookupURL("artist", artistRymUrl, handleCallback(link, name));
     })
   }
 
@@ -619,11 +402,7 @@
     artistNameHeader.appendChild(loadingIcon)
 
     const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("artist", artistName, currentUrl, (found, mbUrl, mbid) => {
-      artistNameHeader.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, artistName, currentUrl, true, "artist")
-      artistNameHeader.appendChild(icon)
-    })
+    lookupURL("artist", currentUrl, handleCallback(artistNameHeader, artistName));
   }
 
   function checkDiscographyReleases() {
@@ -653,11 +432,7 @@
       link.appendChild(loadingIcon)
 
       // Check for release-group (album) rather than specific release
-      searchMusicBrainzEntity("release-group", releaseTitle, releaseRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, releaseTitle, releaseRymUrl, false, "release-group")
-        link.appendChild(icon)
-      })
+      lookupURL("release-group", releaseRymUrl, handleCallback(link, releaseTitle));
     })
   }
 
@@ -687,11 +462,7 @@
     labelNameHeader.appendChild(loadingIcon)
 
     const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("label", labelName, currentUrl, (found, mbUrl, mbid) => {
-      labelNameHeader.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, labelName, currentUrl, false, "label")
-      labelNameHeader.appendChild(icon)
-    })
+    lookupURL("label", currentUrl, handleCallback(labelNameHeader, labelName));
   }
 
   function checkLabelDiscographyReleases() {
@@ -721,11 +492,7 @@
       link.appendChild(loadingIcon)
 
       // Check for release-group (album) rather than specific release
-      searchMusicBrainzEntity("release-group", releaseTitle, releaseRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, releaseTitle, releaseRymUrl, false, "release-group")
-        link.appendChild(icon)
-      })
+      lookupURL("release-group", releaseRymUrl, handleCallback(link, releaseTitle));
     })
   }
 
@@ -750,11 +517,7 @@
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      searchMusicBrainzEntity("artist", artistName, artistRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, artistName, artistRymUrl, true, "artist")
-        link.appendChild(icon)
-      })
+      lookupURL("artist", artistRymUrl, handleCallback(link, artistName));
     })
   }
 
