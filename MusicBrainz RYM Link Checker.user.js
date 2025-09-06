@@ -112,47 +112,87 @@
     return `https://musicbrainz.org/${entityType}/${mbid}`;
   }
 
-  function lookupURL(entityType, url, callback){
+  function lookupURLs(urlList, offset = 0){
+    console.log(urlList.length, " urls, offset is ", offset);
+    let urlsObj = {};
+    for(let i = offset; i < Math.min(urlList.length, offset + 100); i++){
+      if(urlList[i]){
+        let existingCallback = urlsObj[urlList[i].url]?.callback;
+        if(existingCallback){
+          urlsObj[urlList[i].url].callback = (results) => {
+            existingCallback(results);
+            urlList[i].callback(results);
+          }
+        }else{
+          urlsObj[urlList[i].url] = urlList[i];
+        }
+      }
+    }
     queueRequest(() => {
-      console.log(`${MB_API}url?resource=${url}&fmt=json&inc=${entityType}-rels`);
+      let combinedURL = `${MB_API}url?fmt=json`;
+      let includes = [];
+      for(const [url, {entityType, callback}] of Object.entries(urlsObj)){
+        combinedURL += "&resource=" + url;
+        includes.push(entityType);
+      }
+      combinedURL += "&inc=";
+      includes = Array.from(new Set(includes));
+      for(const i in includes){
+        if(i != 0){
+          combinedURL += "+";
+        }
+        combinedURL += includes[i] + "-rels";
+      }
+      console.debug(combinedURL);
       GM_xmlhttpRequest({
         method: "GET",
-        url: `${MB_API}url?resource=${url}&fmt=json&inc=${entityType}-rels`,
+        url: combinedURL,
         onload: (response) => {
-          try {
-            const data = JSON.parse(response.responseText);
-            console.log(data);
-            if(!data.error){
-              const results = data.relations
-                .map((rel) => {
-                  if(rel["target-type"] == "release_group"){
-                    rel["target-type"] = "release-group";
-                    rel["release-group"] = rel["release_group"];
-                  }
-                  return rel;
-                })
-                .filter((rel) => rel["target-type"] == entityType)
-                .map((rel) => {
-                  return {
-                    type: entityType,
-                    id: rel[entityType].id,
-                    url: url,
-                  }});
+          const data = JSON.parse(response.responseText);
+          console.debug(data);
+          if(!data.error){
+            for(const urlItem of data.urls){
+              const {entityType, callback} = urlsObj[urlItem.resource];
+              const results = urlItem.relations
+                    .map((rel) => {
+                      if(rel["target-type"] == "release_group"){
+                        rel["target-type"] = "release-group";
+                        rel["release-group"] = rel["release_group"];
+                      }
+                      return rel;
+                    })
+                    .filter((rel) => rel["target-type"] == entityType)
+                    .map((rel) => {
+                      return {
+                        type: entityType,
+                        id: rel[entityType].id,
+                        url: urlItem.resource,
+                      }});
               callback(results);
-            }else{
+              urlsObj[urlItem.resource].callback = null;
+            }
+          }
+          for(const {callback} of Object.values(urlsObj)){
+            if(callback){
               callback([]);
             }
-          } catch (error) {
-            console.error(error);
-            callback([]);
+          }
+          if(urlList.length > (offset + 100)){
+            lookupURLs(urlList, offset + 100);
           }
         },
         onerror: (response) => {
           console.error(response);
-          callback([]);
+          for(const {callback} of urls.values()){
+            callback([]);
+          }
         }
       })
     })
+  }
+
+  function lookupURL(entityType, url, callback){
+    lookupURLs([{url: url, entityType: entityType, callback: callback}]);
   }
 
   // UI creation functions
@@ -238,22 +278,22 @@
   function checkReleaseGroup() {
     const albumTitleDiv = document.querySelector(".album_title")
     if (!albumTitleDiv) {
-      console.debug("No album title found")
-      return
+      console.warn("No album title found");
+      return [];
     }
 
     const titleText = albumTitleDiv.childNodes[0]?.textContent?.trim()
     if (!titleText) {
-      console.debug("Could not extract album title text")
-      return
+      console.warn("Could not extract album title text");
+      return [];
     }
 
     // Enhanced title extraction with multiple strategies
     const albumTitle = titleText.replace(/\s+\d{4}\s*$/, "").trim() // Remove year at the end
 
     if (!albumTitle) {
-      console.debug("Could not extract album title")
-      return
+      console.warn("Could not extract album title");
+      return [];
     }
 
     console.info("Checking release group:", albumTitle)
@@ -261,15 +301,18 @@
     const loadingIcon = createLoadingIcon()
     albumTitleDiv.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    lookupURL("release-group", currentUrl, handleCallback(albumTitleDiv, albumTitle));
+    return {
+      url: getCurrentRYMUrl(),
+      entityType: "release-group",
+      callback: handleCallback(albumTitleDiv, albumTitle),
+    };
   }
 
   function checkRelease() {
     const titleElem = document.querySelector("h1.entity_title")
     if (!titleElem) {
       console.debug("No release title found")
-      return
+      return [];
     }
 
     const releaseTitle = titleElem.textContent.trim()
@@ -278,8 +321,11 @@
     const loadingIcon = createLoadingIcon()
     titleElem.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    lookupURL("release", currentUrl, handleCallback(titleElem, releaseTitle));
+    return {
+      url: getCurrentRYMUrl(),
+      entityTitle: "release",
+      callback: handleCallback(titleElem, releaseTitle)
+    };
   }
 
   function checkMainArtist() {
@@ -292,7 +338,7 @@
         if (name === "Various Artists") {
           console.debug("Main artist is Various Artists - showing not applicable icon")
           artistLink.appendChild(createNotApplicableIcon("special artist entity"))
-          return
+          return null;
         }
 
         const artistRymUrl = getArtistRYMUrl(artistLink)
@@ -301,7 +347,11 @@
         const loadingIcon = createLoadingIcon()
         artistLink.appendChild(loadingIcon)
 
-        lookupURL("artist", artistRymUrl, handleCallback(artistLink, name));
+        return {
+          url: artistRymUrl,
+          entityType: "artist",
+          callback: handleCallback(artistLink, name)
+        };
       }
     }
   }
@@ -312,7 +362,9 @@
       const classifierLinks = classifiersSpan.querySelectorAll('a[href*="/classifiers/"]')
       classifierLinks.forEach((link) => {
         const name = link.textContent.trim()
-        if (!name) return
+        if (!name) {
+          return;
+        }
 
         console.debug("Classifier:", name, "- showing not applicable icon")
         link.appendChild(createNotApplicableIcon("classifiers not supported"))
@@ -322,28 +374,35 @@
 
   function checkLabels() {
     const classifiersSpan = document.querySelector(".release_info_classifiers")
+    let links = [];
     if (classifiersSpan) {
       const labelLinks = classifiersSpan.querySelectorAll('a[href*="/label/"]')
       labelLinks.forEach((link) => {
         const name = link.textContent.trim()
-        if (!name) return
-
+        if (!name) {
+          return;
+        }
         console.info("Checking label:", name)
-
         const loadingIcon = createLoadingIcon()
         link.appendChild(loadingIcon)
-
-        const currentUrl = getCurrentRYMUrl()
-        lookupURL("label", currentUrl, handleCallback(link, name));
-      })
+        links.push({
+          url: normalizeRYMUrl(link.href),
+          entityType: "label",
+          callback: handleCallback(link, name),
+        });
+      });
     }
+    return links;
   }
 
   function checkFeaturedArtists() {
     const featuredCredits = document.querySelectorAll(".featured_credit a.artist")
+    let links = [];
     featuredCredits.forEach((link) => {
       const name = link.textContent.trim()
-      if (!name) return
+      if (!name) {
+        return;
+      }
 
       const artistRymUrl = getArtistRYMUrl(link)
       console.info("Checking featured artist:", name, "against URL:", artistRymUrl)
@@ -351,20 +410,29 @@
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      lookupURL("artist", artistRymUrl, handleCallback(link, name));
-    })
+      links.push({
+        url: artistRymUrl,
+        entityType: "artist",
+        callback: handleCallback(link, name),
+      });
+    });
+    return links;
   }
 
   function checkArtists(selector, label) {
     const artists = document.querySelectorAll(selector)
     if (artists.length === 0) {
       console.debug(`No ${label} artists found for selector: ${selector}`)
-      return
+      return [];
     }
 
+    let links = [];
+    
     artists.forEach((link) => {
       const name = link.textContent.trim()
-      if (!name) return
+      if (!name) {
+        return;
+      }
 
       const artistRymUrl = getArtistRYMUrl(link)
       console.info(`Checking ${label} artist:`, name, "against URL:", artistRymUrl)
@@ -372,28 +440,32 @@
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      lookupURL("artist", artistRymUrl, handleCallback(link, name));
+      links.push({
+        url: artistRymUrl,
+        entityType: "artist",
+        callback: handleCallback(link, name)});
     })
+    return links;
   }
 
   // Artist page functions (existing)
   function checkArtistPageName() {
     const artistNameDiv = document.querySelector(".artist_name")
     if (!artistNameDiv) {
-      console.debug("No artist name div found")
-      return
+      console.warn("No artist name div found");
+      return [];
     }
 
     const artistNameHeader = artistNameDiv.querySelector("h1.artist_name_hdr")
     if (!artistNameHeader) {
-      console.debug("No artist name header found")
-      return
+      console.warn("No artist name header found");
+      return [];
     }
 
     const artistName = artistNameHeader.textContent.trim()
     if (!artistName) {
-      console.debug("Could not extract artist name")
-      return
+      console.warn("Could not extract artist name");
+      return [];
     }
 
     console.info("Checking artist page name:", artistName)
@@ -401,8 +473,11 @@
     const loadingIcon = createLoadingIcon()
     artistNameHeader.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    lookupURL("artist", currentUrl, handleCallback(artistNameHeader, artistName));
+    return {
+      url: getCurrentRYMUrl(),
+      entityType: "artist",
+      callback: handleCallback(artistNameHeader, artistName)
+    };
   }
 
   function checkDiscographyReleases() {
@@ -415,15 +490,17 @@
     // Find all release links in the discography
     const releaseLinks = discographyDiv.querySelectorAll(".disco_mainline a.album")
     console.info(`Found ${releaseLinks.length} releases in discography`)
-
+    let links = [];
     releaseLinks.forEach((link) => {
       const releaseTitle = link.textContent.trim()
-      if (!releaseTitle) return
+      if (!releaseTitle) {
+        return;
+      }
 
       const releaseRymUrl = getReleaseRYMUrl(link)
       if (!releaseRymUrl) {
         console.debug("Could not get RYM URL for release:", releaseTitle)
-        return
+        return;
       }
 
       console.info("Checking discography release:", releaseTitle, "against URL:", releaseRymUrl)
@@ -432,28 +509,33 @@
       link.appendChild(loadingIcon)
 
       // Check for release-group (album) rather than specific release
-      lookupURL("release-group", releaseRymUrl, handleCallback(link, releaseTitle));
+      links.push({
+        url: releaseRymUrl,
+        entityType: "release-group",
+        callback: handleCallback(link, releaseTitle,
+        )});
     })
+    return links;
   }
 
   // NEW: Label page functions
   function checkLabelPageName() {
     const labelNameDiv = document.querySelector(".page_company_music_section_name_inner")
     if (!labelNameDiv) {
-      console.debug("No label name div found")
-      return
+      console.warn("No label name div found");
+      return [];
     }
 
     const labelNameHeader = labelNameDiv.querySelector("h1")
     if (!labelNameHeader) {
-      console.debug("No label name header found")
-      return
+      console.warn("No label name header found");
+      return [];
     }
 
     const labelName = labelNameHeader.textContent.trim()
     if (!labelName) {
-      console.debug("Could not extract label name")
-      return
+      console.warn("Could not extract label name");
+      return [];
     }
 
     console.info("Checking label page name:", labelName)
@@ -461,29 +543,34 @@
     const loadingIcon = createLoadingIcon()
     labelNameHeader.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    lookupURL("label", currentUrl, handleCallback(labelNameHeader, labelName));
+    return {
+      url: getCurrentRYMUrl(),
+      entityType: "label",
+      callback: handleCallback(labelNameHeader, labelName),
+    };
   }
 
   function checkLabelDiscographyReleases() {
     const discographyDiv = document.querySelector("#component_discography_items_frame")
     if (!discographyDiv) {
       console.debug("No label discography section found")
-      return
+      return [];
     }
 
     // Find all release links in the label discography
     const releaseLinks = discographyDiv.querySelectorAll(".component_discography_item_link.release")
     console.info(`Found ${releaseLinks.length} releases in label discography`)
-
+    let links = [];
     releaseLinks.forEach((link) => {
       const releaseTitle = link.textContent.trim()
-      if (!releaseTitle) return
+      if (!releaseTitle) {
+        return;
+      }
 
       const releaseRymUrl = getReleaseRYMUrl(link)
       if (!releaseRymUrl) {
         console.debug("Could not get RYM URL for release:", releaseTitle)
-        return
+        return;
       }
 
       console.info("Checking label discography release:", releaseTitle, "against URL:", releaseRymUrl)
@@ -492,67 +579,77 @@
       link.appendChild(loadingIcon)
 
       // Check for release-group (album) rather than specific release
-      lookupURL("release-group", releaseRymUrl, handleCallback(link, releaseTitle));
-    })
+      links.push({
+        url: releaseRymUrl,
+        entityType: "release-group",
+        callback: handleCallback(link, releaseTitle),
+      });
+    });
+    return links;
   }
 
   function checkLabelDiscographyArtists() {
     const discographyDiv = document.querySelector("#component_discography_items_frame")
     if (!discographyDiv) {
       console.debug("No label discography section found")
-      return
+      return [];
     }
 
     // Find all artist links in the label discography
     const artistLinks = discographyDiv.querySelectorAll("a.artist")
     console.info(`Found ${artistLinks.length} artists in label discography`)
-
+    let links = [];
     artistLinks.forEach((link) => {
       const artistName = link.textContent.trim()
-      if (!artistName) return
+      if (!artistName) {
+        return;
+      }
 
       const artistRymUrl = getArtistRYMUrl(link)
       console.info("Checking label discography artist:", artistName, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
-
-      lookupURL("artist", artistRymUrl, handleCallback(link, artistName));
-    })
+      links.push({
+        url: artistRymUrl,
+        entityType: "artist",
+        callback: handleCallback(link, artistName),
+      });
+    });
+    return links;
   }
 
   // Main run functions
   function runReleasePageChecks() {
     console.info("Starting enhanced RYM-MusicBrainz checker for release page...")
-
-    checkReleaseGroup()
-    checkRelease()
-    checkMainArtist()
-    checkSecondaryArtistsAndClassifiers()
-    checkLabels()
-    checkFeaturedArtists()
-    checkArtists(".release_pri_artists a", "primary")
-    checkArtists(".tracklist_line a.artist", "tracklist")
-
+    let urls = [checkReleaseGroup(),
+      checkRelease(),
+      checkMainArtist(),
+      checkSecondaryArtistsAndClassifiers(),
+      checkLabels(),
+      checkFeaturedArtists(),
+      checkArtists(".release_pri_artists a", "primary"),
+      checkArtists(".tracklist_line a.artist", "tracklist")]
+      .flat();
+    lookupURLs(urls);
     console.info("All release page checks initiated")
   }
 
   function runArtistPageChecks() {
     console.info("Starting enhanced RYM-MusicBrainz checker for artist page...")
-
-    checkArtistPageName()
-    checkDiscographyReleases()
-
+    let urls = [checkArtistPageName(), checkDiscographyReleases()]
+      .flat();
+    lookupURLs(urls);
     console.info("All artist page checks initiated")
   }
 
   function runLabelPageChecks() {
     console.info("Starting enhanced RYM-MusicBrainz checker for label page...")
-
-    checkLabelPageName()
-    checkLabelDiscographyReleases()
-    checkLabelDiscographyArtists()
-
+    let urls = [checkLabelPageName(),
+      checkLabelDiscographyReleases(),
+      checkLabelDiscographyArtists()]
+      .flat();
+    lookupURLs(urls);
     console.info("All label page checks initiated")
   }
 
