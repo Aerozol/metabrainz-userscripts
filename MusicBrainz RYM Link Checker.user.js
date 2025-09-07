@@ -27,21 +27,17 @@
     if (!url){
       return  null;
     }
-
     try {
       // Remove query parameters and fragments
       let cleanUrl = url.split("?")[0].split("#")[0]
-
       // Ensure https
       cleanUrl = cleanUrl.replace(/^http:/, "https:")
-
-      // Remove trailing slash
-      // cleanUrl = cleanUrl.replace(/\/$/, "")
-
       // Normalize case for path components (but preserve domain case)
       const urlObj = new URL(cleanUrl)
       urlObj.pathname = urlObj.pathname.toLowerCase()
-
+      if(urlObj.pathname.split("/")[1] == "label"){
+        urlObj.pathname = urlObj.pathname.split("/").slice(0,3).join("/") + "/";
+      }
       return urlObj.href
     } catch (e) {
       console.error("Failed to normalize URL:", url, e)
