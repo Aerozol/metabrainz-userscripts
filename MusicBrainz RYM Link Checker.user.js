@@ -164,6 +164,7 @@
                     .filter((rel) => rel["target-type"] == entityType)
                     .map((rel) => {
                       return {
+                        success: true,
                         type: entityType,
                         id: rel[entityType].id,
                         url: urlItem.resource,
@@ -172,9 +173,10 @@
               urlsObj[urlItem.resource].callback = null;
             }
           }
-          for(const {callback} of Object.values(urlsObj)){
+          for(const {entityType, callback} of Object.values(urlsObj)){
             if(callback){
-              callback([]);
+              callback([{type: entityType,
+                         success: false,}]);
             }
           }
           if(urlList.length > (offset + 100)){
@@ -183,8 +185,9 @@
         },
         onerror: (response) => {
           console.error(response);
-          for(const {callback} of urls.values()){
-            callback([]);
+          for(const {entityType, callback} of urls.values()){
+            callback([{entityType: entityType,
+                       success: false}]);
           }
         }
       })
@@ -228,7 +231,10 @@
         // TODO seed rymUrl
       } else {
         // For others, link to search
-        const searchType = entityType === "release-group" ? "release_group" : entityType
+        let searchType = entityType;
+        if(searchType == "release-group"){
+          searchType = "release_group";
+        }
         a.href = `https://musicbrainz.org/search?query=${encodeURIComponent(name)}&type=${searchType}&method=indexed`
       }
     }
@@ -262,13 +268,10 @@
   function handleCallback (element, name){
     return (results) => {
       element.removeChild(element.querySelector(".RYM-Link-Checker-Loading-Icon"));
-      if(results.length > 0){
-        for(const result of results){
-          const icon = createIconWithClick(true, createMBzUrl(result.type, result.id), results.id, name, result.url, result.type);
-          element.appendChild(icon);
-        }
-      }else{
-        const icon = createIconWithClick(false, null, null, name, null, null);
+      for(const result of results){
+        const icon = createIconWithClick(result.success,
+				                                 createMBzUrl(result.type, result.id),
+				                                 results.id, name, result.url, result.type);
         element.appendChild(icon);
       }
     }
