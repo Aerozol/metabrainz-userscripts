@@ -16,7 +16,7 @@
 
 (function () {
   const MB_API = "https://musicbrainz.org/ws/2/"
-  const REQUEST_DELAY = 1100 // 1.1 seconds between requests to respect MB rate limit
+  const REQUEST_DELAY = 1000; // 1 second between requests to respect MB rate limit
 
   // Request queue for rate limiting
   const requestQueue = []
