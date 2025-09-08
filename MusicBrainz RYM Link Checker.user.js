@@ -2,92 +2,21 @@
 // @name         MusicBrainz RYM Link Checker
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Show if RYM artists/labels/release-groups are linked from MusicBrainz.
-// @version      3.2
+// @version      3.3
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Link%20Checker.user.js
 // @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Link%20Checker.user.js
 // @license      MIT
-// @author       chatGPT
+// @author       chatGPT fixed by zabey
 // @match        https://rateyourmusic.com/release/*
 // @match        https://rateyourmusic.com/artist/*
 // @match        https://rateyourmusic.com/label/*
-// @require      https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js
-// @require      https://github.com/murdos/musicbrainz-userscripts/raw/refs/heads/master/lib/logger.js
 // @grant        GM_xmlhttpRequest
 // @connect      musicbrainz.org
 // ==/UserScript==
 
-// prevent JQuery conflicts
-this.$ = this.jQuery = jQuery.noConflict(true)
-;(() => {
+(function () {
   const MB_API = "https://musicbrainz.org/ws/2/"
-  const DEBUG = true
-  const REQUEST_DELAY = 1100 // 1.1 seconds between requests to respect MB rate limit
-  const MAX_SEARCH_RESULTS = 5 // Check up to 5 results for matches
-
-  // Enhanced logging
-  const LOGGER =
-    typeof window.LOGGER !== "undefined"
-      ? window.LOGGER
-      : {
-          debug: DEBUG ? console.log.bind(console, "[MB-DEBUG]") : () => {},
-          info: console.log.bind(console, "[MB-INFO]"),
-          error: console.error.bind(console, "[MB-ERROR]"),
-          setLevel: () => {},
-        }
-
-  if (DEBUG) {
-    LOGGER.setLevel("debug")
-  }
-
-  // Enhanced caching system
-  class EnhancedMBCache {
-    constructor(name, version) {
-      this.name = name
-      this.version = version
-      this.cache = new Map()
-      this.pendingRequests = new Map()
-      this.loadFromStorage()
-    }
-
-    loadFromStorage() {
-      try {
-        const stored = localStorage.getItem(`${this.name}_v${this.version}`)
-        if (stored) {
-          const data = JSON.parse(stored)
-          this.cache = new Map(Object.entries(data))
-          LOGGER.debug("Loaded cache from storage:", this.cache.size, "entries")
-        }
-      } catch (e) {
-        LOGGER.error("Failed to load cache from storage:", e)
-      }
-    }
-
-    saveToStorage() {
-      try {
-        const data = Object.fromEntries(this.cache)
-        localStorage.setItem(`${this.name}_v${this.version}`, JSON.stringify(data))
-        LOGGER.debug("Saved cache to storage:", this.cache.size, "entries")
-      } catch (e) {
-        LOGGER.error("Failed to save cache to storage:", e)
-      }
-    }
-
-    get(key) {
-      return this.cache.get(key)
-    }
-
-    set(key, value) {
-      this.cache.set(key, value)
-      this.saveToStorage()
-    }
-
-    has(key) {
-      return this.cache.has(key)
-    }
-  }
-
-  // Initialize enhanced cache
-  const mbCache = new EnhancedMBCache("RYM_MBLINKS_CACHE", "3")
+  const REQUEST_DELAY = 1000; // 1 second between requests to respect MB rate limit
 
   // Request queue for rate limiting
   const requestQueue = []
@@ -95,25 +24,23 @@ this.$ = this.jQuery = jQuery.noConflict(true)
 
   // URL normalization functions
   function normalizeRYMUrl(url) {
-    if (!url) return null
-
+    if (!url){
+      return  null;
+    }
     try {
       // Remove query parameters and fragments
       let cleanUrl = url.split("?")[0].split("#")[0]
-
       // Ensure https
       cleanUrl = cleanUrl.replace(/^http:/, "https:")
-
-      // Remove trailing slash
-      cleanUrl = cleanUrl.replace(/\/$/, "")
-
       // Normalize case for path components (but preserve domain case)
       const urlObj = new URL(cleanUrl)
       urlObj.pathname = urlObj.pathname.toLowerCase()
-
+      if(urlObj.pathname.split("/")[1] == "label"){
+        urlObj.pathname = urlObj.pathname.split("/").slice(0,3).join("/") + "/";
+      }
       return urlObj.href
     } catch (e) {
-      LOGGER.error("Failed to normalize URL:", url, e)
+      console.error("Failed to normalize URL:", url, e)
       return url
     }
   }
@@ -130,7 +57,7 @@ this.$ = this.jQuery = jQuery.noConflict(true)
         return normalizeRYMUrl(fullUrl)
       }
     } catch (e) {
-      LOGGER.error("Failed to get artist RYM URL:", e)
+      console.error("Failed to get artist RYM URL:", e)
     }
     return getCurrentRYMUrl() // fallback
   }
@@ -143,7 +70,7 @@ this.$ = this.jQuery = jQuery.noConflict(true)
         return normalizeRYMUrl(fullUrl)
       }
     } catch (e) {
-      LOGGER.error("Failed to get release RYM URL:", e)
+      console.error("Failed to get release RYM URL:", e)
     }
     return null
   }
@@ -177,176 +104,110 @@ this.$ = this.jQuery = jQuery.noConflict(true)
     processRequestQueue()
   }
 
-  // Enhanced MusicBrainz search with multiple strategies
-  function searchMusicBrainzEntity(entityType, searchTerm, rymUrl, callback) {
-    const cacheKey = `${entityType}:${searchTerm}:${rymUrl}`
-
-    // Check cache first
-    if (mbCache.has(cacheKey)) {
-      LOGGER.debug("Using cached result for", entityType, searchTerm)
-      const result = mbCache.get(cacheKey)
-      callback(result.found, result.mbUrl, result.mbid)
-      return
-    }
-
-    // Check if request is already pending
-    if (mbCache.pendingRequests.has(cacheKey)) {
-      LOGGER.debug("Request already pending for", entityType, searchTerm)
-      mbCache.pendingRequests.get(cacheKey).push(callback)
-      return
-    }
-
-    // Create new pending request
-    mbCache.pendingRequests.set(cacheKey, [callback])
-
-    // Multiple search strategies
-    const searchStrategies = [
-      searchTerm, // exact search
-      searchTerm.replace(/[^\w\s]/g, ""), // remove special characters
-      searchTerm
-        .replace(/\s+/g, " ")
-        .trim(), // normalize whitespace
-    ]
-
-    // Remove duplicates
-    const uniqueStrategies = [...new Set(searchStrategies)]
-
-    searchWithStrategies(entityType, uniqueStrategies, rymUrl, 0, (found, mbUrl, mbid) => {
-      const result = { found, mbUrl, mbid }
-      mbCache.set(cacheKey, result)
-
-      // Call all pending callbacks
-      const callbacks = mbCache.pendingRequests.get(cacheKey) || []
-      mbCache.pendingRequests.delete(cacheKey)
-      callbacks.forEach((cb) => cb(found, mbUrl, mbid))
-    })
+  function createMBzUrl(entityType, mbid){
+    return `https://musicbrainz.org/${entityType}/${mbid}`;
   }
 
-  function searchWithStrategies(entityType, strategies, rymUrl, strategyIndex, callback) {
-    if (strategyIndex >= strategies.length) {
-      LOGGER.debug("All search strategies exhausted for", entityType)
-      callback(false, null, null)
-      return
+  function lookupURLs(urlList, offset = 0){
+    console.log(urlList.length, " urls, offset is ", offset);
+    let urlsObj = {};
+    for(let i = offset; i < Math.min(urlList.length, offset + 100); i++){
+      if(urlList[i]){
+        let existingCallback = urlsObj[urlList[i].url]?.callback;
+        if(existingCallback){
+          urlsObj[urlList[i].url].callback = (results) => {
+            existingCallback(results);
+            urlList[i].callback(results);
+          }
+        }else{
+          urlsObj[urlList[i].url] = urlList[i];
+        }
+      }
     }
-
-    const searchTerm = strategies[strategyIndex]
-    LOGGER.debug(`Trying search strategy ${strategyIndex + 1}/${strategies.length} for ${entityType}: "${searchTerm}"`)
-
     queueRequest(() => {
-      const searchUrl = `${MB_API}${entityType}/?query=${encodeURIComponent(searchTerm)}&fmt=json&limit=${MAX_SEARCH_RESULTS}`
-      LOGGER.debug("Searching MusicBrainz:", searchUrl)
-
+      let combinedURL = `${MB_API}url?fmt=json`;
+      let includes = [];
+      for(const [url, {entityType, callback}] of Object.entries(urlsObj)){
+        combinedURL += "&resource=" + url;
+        includes.push(entityType);
+      }
+      combinedURL += "&inc=";
+      includes = Array.from(new Set(includes));
+      for(const i in includes){
+        if(i != 0){
+          combinedURL += "+";
+        }
+        combinedURL += includes[i] + "-rels";
+      }
+      console.debug(combinedURL);
       GM_xmlhttpRequest({
         method: "GET",
-        url: searchUrl,
+        url: combinedURL,
         onload: (response) => {
-          try {
-            const data = JSON.parse(response.responseText)
-            const entityKey = entityType === "release-group" ? "release-groups" : `${entityType}s`
-            const results = data[entityKey] || []
-
-            if (results.length === 0) {
-              LOGGER.debug(`No results for strategy ${strategyIndex + 1}, trying next strategy`)
-              searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-              return
+          const data = JSON.parse(response.responseText);
+          console.debug(data);
+          if(!data.error){
+            for(const urlItem of data.urls){
+              const {entityType, callback} = urlsObj[urlItem.resource];
+              const results = urlItem.relations
+                    .map((rel) => {
+                      if(rel["target-type"] == "release_group"){
+                        rel["target-type"] = "release-group";
+                        rel["release-group"] = rel["release_group"];
+                      }
+                      return rel;
+                    })
+                    .filter((rel) => rel["target-type"] == entityType)
+                    .map((rel) => {
+                      return {
+                        success: true,
+                        type: entityType,
+                        id: rel[entityType].id,
+                        url: urlItem.resource,
+                      }});
+              callback(results);
+              urlsObj[urlItem.resource].callback = null;
             }
-
-            LOGGER.debug(`Found ${results.length} results for strategy ${strategyIndex + 1}, checking for RYM links`)
-            checkMultipleResultsForRYMLink(entityType, results, rymUrl, 0, (found, mbUrl, mbid) => {
-              if (found) {
-                LOGGER.info(`Found matching RYM link using strategy ${strategyIndex + 1}!`)
-                callback(found, mbUrl, mbid)
-              } else {
-                LOGGER.debug(`No RYM link found with strategy ${strategyIndex + 1}, trying next strategy`)
-                searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-              }
-            })
-          } catch (e) {
-            LOGGER.error("Error parsing search response:", e)
-            searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
+          }
+          for(const {entityType, callback} of Object.values(urlsObj)){
+            if(callback){
+              callback([{type: entityType,
+                         success: false,}]);
+            }
+          }
+          if(urlList.length > (offset + 100)){
+            lookupURLs(urlList, offset + 100);
           }
         },
-        onerror: (error) => {
-          LOGGER.error("Search request failed:", error)
-          searchWithStrategies(entityType, strategies, rymUrl, strategyIndex + 1, callback)
-        },
+        onerror: (response) => {
+          console.error(response);
+          for(const {entityType, callback} of urls.values()){
+            callback([{entityType: entityType,
+                       success: false}]);
+          }
+        }
       })
     })
   }
 
-  function checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex, callback) {
-    if (resultIndex >= results.length || resultIndex >= MAX_SEARCH_RESULTS) {
-      LOGGER.debug("No matching RYM relationship found in any results")
-      callback(false, null, null)
-      return
-    }
-
-    const match = results[resultIndex]
-    const mbid = match.id
-    const mbUrl = `https://musicbrainz.org/${entityType}/${mbid}`
-
-    LOGGER.debug(
-      `Checking result ${resultIndex + 1}/${Math.min(results.length, MAX_SEARCH_RESULTS)}: ${match.name || match.title}`,
-    )
-
-    queueRequest(() => {
-      const detailUrl = `${MB_API}${entityType}/${mbid}?inc=url-rels&fmt=json`
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: detailUrl,
-        onload: (detailResponse) => {
-          try {
-            const details = JSON.parse(detailResponse.responseText)
-            const urls = details.relations || []
-
-            // Enhanced URL matching with multiple normalization strategies
-            const hasRym = urls.some((rel) => {
-              if (!rel.url || !rel.url.resource) return false
-
-              const mbRymUrl = normalizeRYMUrl(rel.url.resource)
-              const targetRymUrl = normalizeRYMUrl(rymUrl)
-
-              // Try multiple matching strategies
-              return (
-                mbRymUrl === targetRymUrl ||
-                mbRymUrl.toLowerCase() === targetRymUrl.toLowerCase() ||
-                mbRymUrl.replace(/\/$/, "") === targetRymUrl.replace(/\/$/, "")
-              )
-            })
-
-            if (hasRym) {
-              LOGGER.info(`Found matching RYM relationship in result ${resultIndex + 1}!`)
-              callback(true, mbUrl, mbid)
-            } else {
-              // Try next result
-              checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
-            }
-          } catch (e) {
-            LOGGER.error("Error parsing entity details:", e)
-            checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
-          }
-        },
-        onerror: (error) => {
-          LOGGER.error("Detail request failed:", error)
-          checkMultipleResultsForRYMLink(entityType, results, rymUrl, resultIndex + 1, callback)
-        },
-      })
-    })
+  function lookupURL(entityType, url, callback){
+    lookupURLs([{url: url, entityType: entityType, callback: callback}]);
   }
 
   // UI creation functions
   function createLoadingIcon() {
-    const a = document.createElement("a")
-    a.textContent = " ⏳"
-    a.title = "Searching MusicBrainz..."
-    a.style.marginLeft = "0.25em"
-    a.style.textDecoration = "none"
-    a.style.fontSize = "0.9em"
-    a.style.color = "#666"
-    return a
+    const a = document.createElement("a");
+    a.className = "RYM-Link-Checker-Loading-Icon";
+    a.textContent = " ⏳";
+    a.title = "Searching MusicBrainz...";
+    a.style.marginLeft = "0.25em";
+    a.style.textDecoration = "none";
+    a.style.fontSize = "0.9em";
+    return a;
   }
 
-  function createIconWithClick(found, mbUrl, mbid, name, rymUrl, isArtist = false, entityType = "artist") {
+  function createIconWithClick(found, mbUrl, mbid, name, rymUrl, entityType) {
+    const isArtist = (entityType == "artist");
     const a = document.createElement("a")
     a.textContent = found ? " ✅" : " ❌"
     a.title = found
@@ -357,30 +218,19 @@ this.$ = this.jQuery = jQuery.noConflict(true)
     a.style.marginLeft = "0.25em"
     a.style.textDecoration = "none"
     a.style.fontSize = "0.9em"
-    a.style.color = found ? "green" : "gray"
     a.target = "_blank"
 
     if (found) {
       if (mbUrl) a.href = mbUrl
     } else {
       if (isArtist && mbUrl) {
-        a.href = "javascript:void(0)"
-        a.style.cursor = "pointer"
-        a.addEventListener("click", (e) => {
-          e.preventDefault()
-          const mbArtistEditUrl = mbUrl + "/edit"
-          const win = window.open(mbArtistEditUrl, "_blank")
-          if (win) {
-            win.focus()
-          } else {
-            alert(
-              `Popup blocked! Please open manually:\n${mbArtistEditUrl}\n\nAnd add this URL as an external link:\n${rymUrl}`,
-            )
-          }
-        })
+        // TODO seed rymUrl
       } else {
         // For others, link to search
-        const searchType = entityType === "release-group" ? "release_group" : entityType
+        let searchType = entityType;
+        if(searchType == "release-group"){
+          searchType = "release_group";
+        }
         a.href = `https://musicbrainz.org/search?query=${encodeURIComponent(name)}&type=${searchType}&method=indexed`
       }
     }
@@ -411,60 +261,70 @@ this.$ = this.jQuery = jQuery.noConflict(true)
     return window.location.pathname.includes("/label/")
   }
 
+  function handleCallback (element, name){
+    return (results) => {
+      element.removeChild(element.querySelector(".RYM-Link-Checker-Loading-Icon"));
+      for(const result of results){
+        const icon = createIconWithClick(result.success,
+				                                 createMBzUrl(result.type, result.id),
+				                                 results.id, name, result.url, result.type);
+        element.appendChild(icon);
+      }
+    }
+  }
+
   // Release page functions (existing)
   function checkReleaseGroup() {
     const albumTitleDiv = document.querySelector(".album_title")
     if (!albumTitleDiv) {
-      LOGGER.debug("No album title found")
-      return
+      console.warn("No album title found");
+      return [];
     }
 
     const titleText = albumTitleDiv.childNodes[0]?.textContent?.trim()
     if (!titleText) {
-      LOGGER.debug("Could not extract album title text")
-      return
+      console.warn("Could not extract album title text");
+      return [];
     }
 
     // Enhanced title extraction with multiple strategies
     const albumTitle = titleText.replace(/\s+\d{4}\s*$/, "").trim() // Remove year at the end
 
     if (!albumTitle) {
-      LOGGER.debug("Could not extract album title")
-      return
+      console.warn("Could not extract album title");
+      return [];
     }
 
-    LOGGER.info("Checking release group:", albumTitle)
+    console.info("Checking release group:", albumTitle)
 
     const loadingIcon = createLoadingIcon()
     albumTitleDiv.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("release-group", albumTitle, currentUrl, (found, mbUrl, mbid) => {
-      albumTitleDiv.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, albumTitle, currentUrl, false, "release-group")
-      albumTitleDiv.appendChild(icon)
-    })
+    return {
+      url: getCurrentRYMUrl(),
+      entityType: "release-group",
+      callback: handleCallback(albumTitleDiv, albumTitle),
+    };
   }
 
   function checkRelease() {
     const titleElem = document.querySelector("h1.entity_title")
     if (!titleElem) {
-      LOGGER.debug("No release title found")
-      return
+      console.debug("No release title found")
+      return [];
     }
 
     const releaseTitle = titleElem.textContent.trim()
-    LOGGER.info("Checking release:", releaseTitle)
+    console.info("Checking release:", releaseTitle)
 
     const loadingIcon = createLoadingIcon()
     titleElem.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("release", releaseTitle, currentUrl, (found, mbUrl, mbid) => {
-      titleElem.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, releaseTitle, currentUrl, false, "release")
-      titleElem.appendChild(icon)
-    })
+    return {
+      url: getCurrentRYMUrl(),
+      entityTitle: "release",
+      callback: handleCallback(titleElem, releaseTitle)
+    };
   }
 
   function checkMainArtist() {
@@ -475,22 +335,22 @@ this.$ = this.jQuery = jQuery.noConflict(true)
         const name = artistLink.textContent.trim()
 
         if (name === "Various Artists") {
-          LOGGER.debug("Main artist is Various Artists - showing not applicable icon")
+          console.debug("Main artist is Various Artists - showing not applicable icon")
           artistLink.appendChild(createNotApplicableIcon("special artist entity"))
-          return
+          return null;
         }
 
         const artistRymUrl = getArtistRYMUrl(artistLink)
-        LOGGER.info("Checking main artist:", name, "against URL:", artistRymUrl)
+        console.info("Checking main artist:", name, "against URL:", artistRymUrl)
 
         const loadingIcon = createLoadingIcon()
         artistLink.appendChild(loadingIcon)
 
-        searchMusicBrainzEntity("artist", name, artistRymUrl, (found, mbUrl, mbid) => {
-          artistLink.removeChild(loadingIcon)
-          const icon = createIconWithClick(found, mbUrl, mbid, name, artistRymUrl, true, "artist")
-          artistLink.appendChild(icon)
-        })
+        return {
+          url: artistRymUrl,
+          entityType: "artist",
+          callback: handleCallback(artistLink, name)
+        };
       }
     }
   }
@@ -501,9 +361,11 @@ this.$ = this.jQuery = jQuery.noConflict(true)
       const classifierLinks = classifiersSpan.querySelectorAll('a[href*="/classifiers/"]')
       classifierLinks.forEach((link) => {
         const name = link.textContent.trim()
-        if (!name) return
+        if (!name) {
+          return;
+        }
 
-        LOGGER.debug("Classifier:", name, "- showing not applicable icon")
+        console.debug("Classifier:", name, "- showing not applicable icon")
         link.appendChild(createNotApplicableIcon("classifiers not supported"))
       })
     }
@@ -511,270 +373,283 @@ this.$ = this.jQuery = jQuery.noConflict(true)
 
   function checkLabels() {
     const classifiersSpan = document.querySelector(".release_info_classifiers")
+    let links = [];
     if (classifiersSpan) {
       const labelLinks = classifiersSpan.querySelectorAll('a[href*="/label/"]')
       labelLinks.forEach((link) => {
         const name = link.textContent.trim()
-        if (!name) return
-
-        LOGGER.info("Checking label:", name)
-
+        if (!name) {
+          return;
+        }
+        console.info("Checking label:", name)
         const loadingIcon = createLoadingIcon()
         link.appendChild(loadingIcon)
-
-        const currentUrl = getCurrentRYMUrl()
-        searchMusicBrainzEntity("label", name, currentUrl, (found, mbUrl, mbid) => {
-          link.removeChild(loadingIcon)
-          const icon = createIconWithClick(found, mbUrl, mbid, name, currentUrl, false, "label")
-          link.appendChild(icon)
-        })
-      })
+        links.push({
+          url: normalizeRYMUrl(link.href),
+          entityType: "label",
+          callback: handleCallback(link, name),
+        });
+      });
     }
+    return links;
   }
 
   function checkFeaturedArtists() {
     const featuredCredits = document.querySelectorAll(".featured_credit a.artist")
+    let links = [];
     featuredCredits.forEach((link) => {
       const name = link.textContent.trim()
-      if (!name) return
+      if (!name) {
+        return;
+      }
 
       const artistRymUrl = getArtistRYMUrl(link)
-      LOGGER.info("Checking featured artist:", name, "against URL:", artistRymUrl)
+      console.info("Checking featured artist:", name, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      searchMusicBrainzEntity("artist", name, artistRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, name, artistRymUrl, true, "artist")
-        link.appendChild(icon)
-      })
-    })
+      links.push({
+        url: artistRymUrl,
+        entityType: "artist",
+        callback: handleCallback(link, name),
+      });
+    });
+    return links;
   }
 
   function checkArtists(selector, label) {
     const artists = document.querySelectorAll(selector)
     if (artists.length === 0) {
-      LOGGER.debug(`No ${label} artists found for selector: ${selector}`)
-      return
+      console.debug(`No ${label} artists found for selector: ${selector}`)
+      return [];
     }
 
+    let links = [];
+    
     artists.forEach((link) => {
       const name = link.textContent.trim()
-      if (!name) return
+      if (!name) {
+        return;
+      }
 
       const artistRymUrl = getArtistRYMUrl(link)
-      LOGGER.info(`Checking ${label} artist:`, name, "against URL:", artistRymUrl)
+      console.info(`Checking ${label} artist:`, name, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
-      searchMusicBrainzEntity("artist", name, artistRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, name, artistRymUrl, true, "artist")
-        link.appendChild(icon)
-      })
+      links.push({
+        url: artistRymUrl,
+        entityType: "artist",
+        callback: handleCallback(link, name)});
     })
+    return links;
   }
 
   // Artist page functions (existing)
   function checkArtistPageName() {
     const artistNameDiv = document.querySelector(".artist_name")
     if (!artistNameDiv) {
-      LOGGER.debug("No artist name div found")
-      return
+      console.warn("No artist name div found");
+      return [];
     }
 
     const artistNameHeader = artistNameDiv.querySelector("h1.artist_name_hdr")
     if (!artistNameHeader) {
-      LOGGER.debug("No artist name header found")
-      return
+      console.warn("No artist name header found");
+      return [];
     }
 
     const artistName = artistNameHeader.textContent.trim()
     if (!artistName) {
-      LOGGER.debug("Could not extract artist name")
-      return
+      console.warn("Could not extract artist name");
+      return [];
     }
 
-    LOGGER.info("Checking artist page name:", artistName)
+    console.info("Checking artist page name:", artistName)
 
     const loadingIcon = createLoadingIcon()
     artistNameHeader.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("artist", artistName, currentUrl, (found, mbUrl, mbid) => {
-      artistNameHeader.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, artistName, currentUrl, true, "artist")
-      artistNameHeader.appendChild(icon)
-    })
+    return {
+      url: getCurrentRYMUrl(),
+      entityType: "artist",
+      callback: handleCallback(artistNameHeader, artistName)
+    };
   }
 
   function checkDiscographyReleases() {
     const discographyDiv = document.querySelector(".section_artist_discography")
     if (!discographyDiv) {
-      LOGGER.debug("No discography section found")
+      console.debug("No discography section found")
       return
     }
 
     // Find all release links in the discography
     const releaseLinks = discographyDiv.querySelectorAll(".disco_mainline a.album")
-    LOGGER.info(`Found ${releaseLinks.length} releases in discography`)
-
+    console.info(`Found ${releaseLinks.length} releases in discography`)
+    let links = [];
     releaseLinks.forEach((link) => {
       const releaseTitle = link.textContent.trim()
-      if (!releaseTitle) return
+      if (!releaseTitle) {
+        return;
+      }
 
       const releaseRymUrl = getReleaseRYMUrl(link)
       if (!releaseRymUrl) {
-        LOGGER.debug("Could not get RYM URL for release:", releaseTitle)
-        return
+        console.debug("Could not get RYM URL for release:", releaseTitle)
+        return;
       }
 
-      LOGGER.info("Checking discography release:", releaseTitle, "against URL:", releaseRymUrl)
+      console.info("Checking discography release:", releaseTitle, "against URL:", releaseRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
       // Check for release-group (album) rather than specific release
-      searchMusicBrainzEntity("release-group", releaseTitle, releaseRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, releaseTitle, releaseRymUrl, false, "release-group")
-        link.appendChild(icon)
-      })
+      links.push({
+        url: releaseRymUrl,
+        entityType: "release-group",
+        callback: handleCallback(link, releaseTitle,
+        )});
     })
+    return links;
   }
 
   // NEW: Label page functions
   function checkLabelPageName() {
     const labelNameDiv = document.querySelector(".page_company_music_section_name_inner")
     if (!labelNameDiv) {
-      LOGGER.debug("No label name div found")
-      return
+      console.warn("No label name div found");
+      return [];
     }
 
     const labelNameHeader = labelNameDiv.querySelector("h1")
     if (!labelNameHeader) {
-      LOGGER.debug("No label name header found")
-      return
+      console.warn("No label name header found");
+      return [];
     }
 
     const labelName = labelNameHeader.textContent.trim()
     if (!labelName) {
-      LOGGER.debug("Could not extract label name")
-      return
+      console.warn("Could not extract label name");
+      return [];
     }
 
-    LOGGER.info("Checking label page name:", labelName)
+    console.info("Checking label page name:", labelName)
 
     const loadingIcon = createLoadingIcon()
     labelNameHeader.appendChild(loadingIcon)
 
-    const currentUrl = getCurrentRYMUrl()
-    searchMusicBrainzEntity("label", labelName, currentUrl, (found, mbUrl, mbid) => {
-      labelNameHeader.removeChild(loadingIcon)
-      const icon = createIconWithClick(found, mbUrl, mbid, labelName, currentUrl, false, "label")
-      labelNameHeader.appendChild(icon)
-    })
+    return {
+      url: getCurrentRYMUrl(),
+      entityType: "label",
+      callback: handleCallback(labelNameHeader, labelName),
+    };
   }
 
   function checkLabelDiscographyReleases() {
     const discographyDiv = document.querySelector("#component_discography_items_frame")
     if (!discographyDiv) {
-      LOGGER.debug("No label discography section found")
-      return
+      console.debug("No label discography section found")
+      return [];
     }
 
     // Find all release links in the label discography
     const releaseLinks = discographyDiv.querySelectorAll(".component_discography_item_link.release")
-    LOGGER.info(`Found ${releaseLinks.length} releases in label discography`)
-
+    console.info(`Found ${releaseLinks.length} releases in label discography`)
+    let links = [];
     releaseLinks.forEach((link) => {
       const releaseTitle = link.textContent.trim()
-      if (!releaseTitle) return
+      if (!releaseTitle) {
+        return;
+      }
 
       const releaseRymUrl = getReleaseRYMUrl(link)
       if (!releaseRymUrl) {
-        LOGGER.debug("Could not get RYM URL for release:", releaseTitle)
-        return
+        console.debug("Could not get RYM URL for release:", releaseTitle)
+        return;
       }
 
-      LOGGER.info("Checking label discography release:", releaseTitle, "against URL:", releaseRymUrl)
+      console.info("Checking label discography release:", releaseTitle, "against URL:", releaseRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
 
       // Check for release-group (album) rather than specific release
-      searchMusicBrainzEntity("release-group", releaseTitle, releaseRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, releaseTitle, releaseRymUrl, false, "release-group")
-        link.appendChild(icon)
-      })
-    })
+      links.push({
+        url: releaseRymUrl,
+        entityType: "release-group",
+        callback: handleCallback(link, releaseTitle),
+      });
+    });
+    return links;
   }
 
   function checkLabelDiscographyArtists() {
     const discographyDiv = document.querySelector("#component_discography_items_frame")
     if (!discographyDiv) {
-      LOGGER.debug("No label discography section found")
-      return
+      console.debug("No label discography section found")
+      return [];
     }
 
     // Find all artist links in the label discography
     const artistLinks = discographyDiv.querySelectorAll("a.artist")
-    LOGGER.info(`Found ${artistLinks.length} artists in label discography`)
-
+    console.info(`Found ${artistLinks.length} artists in label discography`)
+    let links = [];
     artistLinks.forEach((link) => {
       const artistName = link.textContent.trim()
-      if (!artistName) return
+      if (!artistName) {
+        return;
+      }
 
       const artistRymUrl = getArtistRYMUrl(link)
-      LOGGER.info("Checking label discography artist:", artistName, "against URL:", artistRymUrl)
+      console.info("Checking label discography artist:", artistName, "against URL:", artistRymUrl)
 
       const loadingIcon = createLoadingIcon()
       link.appendChild(loadingIcon)
-
-      searchMusicBrainzEntity("artist", artistName, artistRymUrl, (found, mbUrl, mbid) => {
-        link.removeChild(loadingIcon)
-        const icon = createIconWithClick(found, mbUrl, mbid, artistName, artistRymUrl, true, "artist")
-        link.appendChild(icon)
-      })
-    })
+      links.push({
+        url: artistRymUrl,
+        entityType: "artist",
+        callback: handleCallback(link, artistName),
+      });
+    });
+    return links;
   }
 
   // Main run functions
   function runReleasePageChecks() {
-    LOGGER.info("Starting enhanced RYM-MusicBrainz checker for release page...")
-
-    checkReleaseGroup()
-    checkRelease()
-    checkMainArtist()
-    checkSecondaryArtistsAndClassifiers()
-    checkLabels()
-    checkFeaturedArtists()
-    checkArtists(".release_pri_artists a", "primary")
-    checkArtists(".tracklist_line a.artist", "tracklist")
-
-    LOGGER.info("All release page checks initiated")
+    console.info("Starting enhanced RYM-MusicBrainz checker for release page...")
+    let urls = [checkReleaseGroup(),
+      checkRelease(),
+      checkMainArtist(),
+      checkSecondaryArtistsAndClassifiers(),
+      checkLabels(),
+      checkFeaturedArtists(),
+      checkArtists(".release_pri_artists a", "primary"),
+      checkArtists(".tracklist_line a.artist", "tracklist")]
+      .flat();
+    lookupURLs(urls);
+    console.info("All release page checks initiated")
   }
 
   function runArtistPageChecks() {
-    LOGGER.info("Starting enhanced RYM-MusicBrainz checker for artist page...")
-
-    checkArtistPageName()
-    checkDiscographyReleases()
-
-    LOGGER.info("All artist page checks initiated")
+    console.info("Starting enhanced RYM-MusicBrainz checker for artist page...")
+    let urls = [checkArtistPageName(), checkDiscographyReleases()]
+      .flat();
+    lookupURLs(urls);
+    console.info("All artist page checks initiated")
   }
 
   function runLabelPageChecks() {
-    LOGGER.info("Starting enhanced RYM-MusicBrainz checker for label page...")
-
-    checkLabelPageName()
-    checkLabelDiscographyReleases()
-    checkLabelDiscographyArtists()
-
-    LOGGER.info("All label page checks initiated")
+    console.info("Starting enhanced RYM-MusicBrainz checker for label page...")
+    let urls = [checkLabelPageName(),
+      checkLabelDiscographyReleases(),
+      checkLabelDiscographyArtists()]
+      .flat();
+    lookupURLs(urls);
+    console.info("All label page checks initiated")
   }
 
   function run() {
@@ -785,10 +660,10 @@ this.$ = this.jQuery = jQuery.noConflict(true)
     } else if (isLabelPage()) {
       runLabelPageChecks()
     } else {
-      LOGGER.debug("Unknown page type, skipping checks")
+      console.debug("Unknown page type, skipping checks")
     }
   }
 
   // Wait for page to load, then run
   setTimeout(run, 1500)
-})()
+})();
