@@ -2,11 +2,11 @@
 // @name         MusicBrainz RYM Link Checker
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Show if RYM artists/labels/release-groups are linked from MusicBrainz.
-// @version      3.2
+// @version      3.3
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Link%20Checker.user.js
 // @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Link%20Checker.user.js
 // @license      MIT
-// @author       chatGPT
+// @author       chatGPT fixed by zabey
 // @match        https://rateyourmusic.com/release/*
 // @match        https://rateyourmusic.com/artist/*
 // @match        https://rateyourmusic.com/label/*
