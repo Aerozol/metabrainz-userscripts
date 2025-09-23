@@ -2,7 +2,7 @@
 // @name        MusicBrainz Quick Recording Match
 // @namespace   https://github.com/Aerozol/metabrainz-userscripts
 // @description Select the first recording search result for each track, in the release editor Recordings tab.
-// @version     5.16
+// @version     5.17
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @license     MIT
@@ -289,6 +289,7 @@
         p1.appendChild(unlinkButton);
         p1.appendChild(createConfidenceDropdown());
         p1.appendChild(createMethodDropdown());
+        p1.appendChild(createStartAtDropdown()); // Add the new dropdown here
         fieldset.appendChild(p1);
 
         return fieldset;
@@ -379,7 +380,9 @@
 
     function runProcess(handler) {
         isCancelled = false;
-        currentIndex = 0;
+        const startAtDropdown = document.getElementById('start-at-dropdown');
+        const startIndex = startAtDropdown ? parseInt(startAtDropdown.value) : 0;
+        currentIndex = startIndex;
         editButtons = document.querySelectorAll('#recordings .edit-track-recording');
         if (editButtons.length === 0) {
             alert("No tracks found. Make sure you are on the 'Recordings' tab and have a tracklist.");
@@ -617,4 +620,45 @@
         console.log("MusicBrainz Quick Tools Debug: Initializing MutationObserver on the recording association bubble.");
         popupObserver.observe(recordingPopup, { childList: true, subtree: true });
     }
+
+    function createStartAtDropdown() {
+        const container = document.createElement('span');
+        container.style.display = 'inline-flex';
+        container.style.alignItems = 'center';
+
+        const separator = document.createElement('span');
+        separator.textContent = '|';
+        separator.style.margin = '0 10px 0 5px';
+        separator.style.color = '#ccc';
+        container.appendChild(separator);
+
+        const label = document.createElement('span');
+        label.textContent = 'Start at:';
+        label.style.fontWeight = 'bold';
+        label.style.marginRight = '5px';
+        container.appendChild(label);
+
+        const select = document.createElement('select');
+        select.id = 'start-at-dropdown';
+        select.style.cssText = `
+            padding: 4px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        `;
+
+        const trackRows = document.querySelectorAll('#track-recording-assignation tr.track');
+        trackRows.forEach((trackRow, index) => {
+            const option = document.createElement('option');
+            const trackNumberElement = trackRow.querySelector('td.track.title');
+            const trackNumber = trackNumberElement ? trackNumberElement.textContent.trim() : index + 1;
+            option.value = index;
+            option.textContent = `Track ${trackNumber}`;
+            select.appendChild(option);
+        });
+
+        container.appendChild(select);
+        return container;
+    }
+
 })();
