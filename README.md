@@ -4,6 +4,7 @@ MusicBrainz userscripts written by chatGPT, barely checked by me. Use at your ow
 ### <a name="musicbrainz_elephant_tags"></a> MusicBrainz Elephant Tags
 
 Adds a button to submit and remember tag strings. Ctrl+click to forget them again. Works!
+*Note:* replaced and improved by MusicBrainz Nuclear Tags, but here in case you want a lightweight version without bulk actions
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js">
   <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
@@ -14,6 +15,22 @@ Adds a button to submit and remember tag strings. Ctrl+click to forget them agai
 </a>
 
 <a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/elephant_tags.png" target="_blank">
+  <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
+### <a name="musicbrainz_elephant_tags"></a> MusicBrainz Nuclear Tags
+
+Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings). Works!
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Nuclear%20Tags.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Nuclear%20Tags.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/nuclear_tags.png" target="_blank">
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
