@@ -1,5 +1,5 @@
 # metabrainz-userscripts
-MusicBrainz userscripts written by chatGPT, barely checked by me. Use at your own risk.
+MusicBrainz userscripts written by chatGPT/Gemini. Use at your own risk.
 
 ### <a name="musicbrainz_elephant_tags"></a> MusicBrainz Elephant Tags
 
