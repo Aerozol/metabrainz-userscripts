@@ -3,7 +3,7 @@ MusicBrainz userscripts written by chatGPT/Gemini. Use at your own risk.
 
 ### <a name="musicbrainz_elephant_tags"></a> MusicBrainz Elephant Tags
 
-Adds a button to submit and remember tag strings. Ctrl+click to forget them again. Works!
+Adds a button to submit and remember tag strings. Ctrl+click to forget them again. Works!  
 *Note:* replaced and improved by MusicBrainz Nuclear Tags, but here in case you want a lightweight version without bulk actions
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Elephant%20Tags.user.js">
