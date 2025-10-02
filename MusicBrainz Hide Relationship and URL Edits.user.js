@@ -8,7 +8,7 @@
 // @license      MIT
 // @author       Gemini
 // @match        *://*.musicbrainz.org/*/edits*
-// @match        *://*.musicbrainz.org/*/open-edits*
+// @match        *://*.musicbrainz.org/*/open_edits*
 // @grant        none
 // ==/UserScript==
 
