@@ -1,19 +1,20 @@
 # metabrainz-userscripts
 MusicBrainz userscripts written by chatGPT/Gemini. Use at your own risk.
 
-### <a name="musicbrainz_hide_streaming_link_edits"></a> MusicBrainz Hide Streaming Link Edits
+### <a name="musicbrainz_hide_relationship_and_url_edits"></a> MusicBrainz Hide Relationship and URL Edits
 
-Adds a button to filter relationship and URL edits (e.g. streaming links) out of MusicBrainz edit history pages. Seems to work!
+Adds a button to filter relationship and URL edits (e.g. streaming links) out of MusicBrainz edit history pages. Beware: Will hide more than just streaming link edits.  
+Check out the [mb. SUPER MIND CONTROL II X TURBO](https://github.com/jesus2099/konami-command/blob/master/mb_SUPER-MIND-CONTROL-II-X-TURBO.md) userscript for more powerful 'pure' edit features.
 
-<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Hide%20Streaming%20Link%20Edits.user.js">
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Hide%20Relationship%20and%20URL%20Edits.user.js">
   <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
 </a>
 
-<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Hide%20Streaming%20Link%20Edits.user.js">
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Hide%20Relationship%20and%20URL%20Edits.user.js">
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
 </a>
 
-<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/hide_streaming_links.png" target="_blank">
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/hide_relationship_and_URL_edits.png" target="_blank">
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
