@@ -3,8 +3,8 @@
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Adds a button to filter relationship and URL edits (e.g. streaming links) out of MusicBrainz edit history pages.
 // @version      1
-// @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Hide%20Relationship%20Edits.user.js
-// @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Hide%20Relationship%20Edits.user.js
+// @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Hide%20Streaming%20Link%20Edits.user.js
+// @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Hide%20Streaming%20Link%20Edits.user.js
 // @license      MIT
 // @author       Gemini
 // @match        *://*.musicbrainz.org/*/edits*
@@ -51,7 +51,7 @@
         const currentUrl = new URL(window.location.href);
         const params = currentUrl.searchParams;
 
-        // Check if the relationship exclusion filter is already active.
+        // Check if the  exclusion filter is already active.
         const isCurrentlyFiltered = params.get('conditions.1.field') === 'type' &&
                                    params.get('conditions.1.operator') === '!=' &&
                                    params.get('conditions.1.args') === EXCLUDED_EDIT_TYPES;
@@ -62,7 +62,7 @@
 
         if (isCurrentlyFiltered) {
             // State: Currently filtered -> Action: Remove filter
-            buttonText = 'Show All Relationship Edits';
+            buttonText = 'Show All Streaming Edits';
 
             // Start with the Refine link's URL (which has the correct conditions.0.* entity filter)
             const urlToModifyBack = new URL(refineUrl.href);
@@ -75,7 +75,7 @@
 
         } else {
             // State: Not filtered -> Action: Apply filter
-            buttonText = 'Hide Relationship Edits';
+            buttonText = 'Hide Streaming Edits';
 
             const urlToModify = new URL(currentHref);
 
@@ -102,7 +102,7 @@
 
     if (!refineLink) {
         // If the 'Refine this search' link is not found, we cannot generate the correct URL.
-        console.log('MusicBrainz Hide Relationship Edits: Could not find "Refine this search" link.');
+        console.log('MusicBrainz Hide Streaming Edits: Could not find "Refine this search" link.');
         return;
     }
 
