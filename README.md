@@ -1,7 +1,23 @@
 # metabrainz-userscripts
 MusicBrainz userscripts written by chatGPT/Gemini. Use at your own risk.
 
-### <a name="musicbrainz_elephant_tags"></a> MusicBrainz Nuclear Tags
+### <a name="musicbrainz_hide_streaming_link_edits"></a> MusicBrainz Hide Streaming Link Edits
+
+Adds a button to filter relationship and URL edits (e.g. streaming links) out of MusicBrainz edit history pages. Seems to work!
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Hide%20Streaming%20Link%20Edits.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Hide%20Streaming%20Link%20Edits.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/hide_streaming_links.png" target="_blank">
+  <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
+### <a name="musicbrainz_nuclear_tags"></a> MusicBrainz Nuclear Tags
 
 Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings). Works!
 
