@@ -2,7 +2,7 @@
 // @name MusicBrainz Elephant Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Adds a button to submit and remember tag strings. Ctrl+click to forget them again.
-// @version      1.1
+// @version      1.2
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Elephant%20Tags.user.js
 // @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Elephant%20Tags.user.js
 // @license      MIT
@@ -194,5 +194,8 @@
         renderTagButtons(shortcutContainer, getSavedTags(), input, submitButton);
     }
 
-    window.addEventListener('load', addTaggingUI);
+    const observer = new MutationObserver(() => {
+        addTaggingUI();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
 })();
