@@ -197,22 +197,16 @@
     // Bulk Tagging/Clearing Functions
     // ----------------------------------------------------------------------
 
-    // Custom AJAX function for UPVOTE. Used by the bulk action to tag list entities.
-    async function upvoteEntityTags(id, type, tag) {
-        const requestUrl = `${location.origin}/${type}/${id}/tags/upvote?tags=${encodeURIComponent(tag)}`;
-        try {
-            const response = await fetch(requestUrl, {
-                credentials: "include",
-                method: "GET",
-                headers: { "Accept": "*/*", "X-Requested-With": "XMLHttpRequest" }
-            });
-            return response.ok;
-        } catch (err) { return false; }
-    }
-
-    // Custom AJAX function for DOWNVOTE. Used by bulk action to clear list entities.
-    async function clearEntityTags(id, type, tag) {
-        const requestUrl = `${location.origin}/${type}/${id}/tags/downvote?tags=${encodeURIComponent(tag)}`;
+    /**
+     * Sends a request to the MusicBrainz API to upvote (tag) or downvote (clear) a tag for a given entity.
+     * @param {string} id The MBID of the entity.
+     * @param {string} type The entity type (e.g., 'release-group', 'release', 'recording').
+     * @param {string} tag The tag string to apply or clear.
+     * @param {'upvote'|'downvote'} action The action to perform.
+     * @returns {Promise<boolean>} A promise that resolves to true on success, false on failure.
+     */
+    async function updateEntityTags(id, type, tag, action) {
+        const requestUrl = `${location.origin}/${type}/${id}/tags/${action}?tags=${encodeURIComponent(tag)}`;
         try {
             const response = await fetch(requestUrl, {
                 credentials: "include",
@@ -221,13 +215,13 @@
             });
 
             if (!response.ok) {
-                 // **LOGGING ADDED**: Report non-successful status codes in the console.
-                 console.error(`[ElephantTags - AJAX Failure] Clear failed for ${type} ${id} tag "${tag}". Status: ${response.status} ${response.statusText}. Check the Network tab for details.`);
+                // **LOGGING ADDED**: Report non-successful status codes in the console.
+                console.error(`[ElephantTags - AJAX Failure] Action '${action}' failed for ${type} ${id} tag "${tag}". Status: ${response.status} ${response.statusText}. Check the Network tab for details.`);
             }
 
             return response.ok;
         } catch (err) {
-            console.error(`[ElephantTags - Network Error] Clear failed for ${type} ${id} tag "${tag}". Error:`, err);
+            console.error(`[ElephantTags - Network Error] Action '${action}' failed for ${type} ${id} tag "${tag}". Error:`, err);
             return false;
         }
     }
@@ -275,7 +269,7 @@
     }
 
     // MODIFIED: Added taggedRecordingIds parameter with default value for safety
-    async function fetchAndExecuteRecordingsFromRelease(releaseId, tag, actionFunction, isClear, taggedRecordingIds = new Set()) {
+    async function fetchAndExecuteRecordingsFromRelease(releaseId, tag, action, isClear, taggedRecordingIds = new Set()) {
         let success = 0;
         let failure = 0;
 
@@ -306,7 +300,7 @@
                 // --- END OPTIMIZATION ---
 
 
-                const isSuccess = await actionFunction(recordingId, 'recording', tag);
+                const isSuccess = await updateEntityTags(recordingId, 'recording', tag, action);
                 isSuccess ? success++ : failure++;
 
                 // Add ID to the set if the tag was successful (only for tagging)
@@ -324,7 +318,7 @@
 
  async function tagCheckedReleaseGroups(tag, actionType, isToggledRGsParam, isToggledReleasesParam, isToggledRecordingsParam) {
     // Action function is AJAX Upvote or AJAX Downvote
-    const actionFunction = (actionType === 'tag') ? upvoteEntityTags : clearEntityTags;
+    const action = (actionType === 'tag') ? 'upvote' : 'downvote';
     const isClear = actionType === 'clear';
 
     // --- OPTIMIZATION: Track tagged recordings globally for this cascade ---
@@ -358,7 +352,7 @@
         let isRGSuccess = true;
         if (isToggledRGsParam) {
             rgLink.closest('td').querySelectorAll('.rg-tag-status').forEach(el => el.remove());
-            isRGSuccess = await actionFunction(releaseGroupId, 'release-group', tag);
+            isRGSuccess = await updateEntityTags(releaseGroupId, 'release-group', tag, action);
             isRGSuccess ? rgSuccess++ : rgFailure++;
             if(isRGSuccess) checkbox.checked = false;
             showTagStatus(rgLink, tag, isRGSuccess, true, isClear);
@@ -377,7 +371,7 @@
                 // Release tagging/clearing: Only execute if the Release toggle is explicitly checked
                 let isRLSuccess = true;
                 if (isToggledReleasesParam) {
-                    isRLSuccess = await actionFunction(release.id, 'release', tag);
+                    isRLSuccess = await updateEntityTags(release.id, 'release', tag, action);
                     isRLSuccess ? rlSuccess++ : rlFailure++;
 
                     if (isRLSuccess) {
@@ -391,7 +385,7 @@
                 // Requires the recording toggle to be on AND a release action to have succeeded (or been skipped, as isRLSuccess is true by default if skipped)
                 if (isToggledRecordingsParam && isRLSuccess) {
                     updateProgress(`Processing RG ${i + 1}/${totalRGs}: ${isClear ? 'Clearing' : 'Tagging'} Recordings in Release: ${release.title}...`);
-                    const recResults = await fetchAndExecuteRecordingsFromRelease(release.id, tag, actionFunction, isClear, taggedRecordingIds);
+                    const recResults = await fetchAndExecuteRecordingsFromRelease(release.id, tag, action, isClear, taggedRecordingIds);
                     recSuccess += recResults.success;
                     recFailure += recResults.failure;
                 }
@@ -411,7 +405,7 @@
 
 async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isToggledRecordingsParam) {
     // Action function is AJAX Upvote or AJAX Downvote
-    const actionFunction = (actionType === 'tag') ? upvoteEntityTags : clearEntityTags;
+    const action = (actionType === 'tag') ? 'upvote' : 'downvote';
     const isClear = actionType === 'clear';
 
     // --- OPTIMIZATION: Track tagged recordings globally for this cascade ---
@@ -445,7 +439,7 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
         let isRLSuccess = true;
         if (isToggledReleasesParam) {
             rlLink.closest('td').querySelectorAll('.rg-tag-status').forEach(el => el.remove());
-            isRLSuccess = await actionFunction(releaseId, 'release', tag);
+            isRLSuccess = await updateEntityTags(releaseId, 'release', tag, action);
             isRLSuccess ? rlSuccess++ : rlFailure++;
             if(isRLSuccess) checkbox.checked = false;
             showTagStatus(rlLink, tag, isRLSuccess, true, isClear);
@@ -456,7 +450,7 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
         // Requires the recording toggle to be on AND a release action to have succeeded (or been skipped)
         if (isToggledRecordingsParam && isRLSuccess) {
             updateProgress(`Processing Release ${i + 1}/${totalReleases}: ${isClear ? 'Clearing' : 'Tagging'} Recordings...`);
-            const recResults = await fetchAndExecuteRecordingsFromRelease(releaseId, tag, actionFunction, isClear, taggedRecordingIds);
+            const recResults = await fetchAndExecuteRecordingsFromRelease(releaseId, tag, action, isClear, taggedRecordingIds);
             recSuccess += recResults.success;
             recFailure += recResults.failure;
         }
@@ -473,7 +467,7 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
 
     async function tagCheckedRecordings(tag, actionType) {
         // Action function is AJAX Upvote or AJAX Downvote
-        const actionFunction = (actionType === 'tag') ? upvoteEntityTags : clearEntityTags;
+        const action = (actionType === 'tag') ? 'upvote' : 'downvote';
         const isClear = actionType === 'clear';
 
         const checkedRecordings = Array.from(document.querySelectorAll('table.tbl.medium ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null);
@@ -499,7 +493,7 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
             // Execute AJAX and show status for the list entity
             recordingLink.closest('.title').querySelectorAll('.rec-tag-status').forEach(el => el.remove());
 
-            const isSuccess = await actionFunction(recordingId, 'recording', tag);
+            const isSuccess = await updateEntityTags(recordingId, 'recording', tag, action);
             isSuccess ? successCount++ : failureCount++;
 
             showTagStatus(recordingLink, tag, isSuccess, false, isClear);
@@ -893,7 +887,7 @@ if (pageContext === 'artist') {
                         updateProgress(`Clearing tag from current entity: ${tagText}...`);
 
                         // Use custom AJAX clear for current entity in the bulk path
-                        const isMainEntityClearSuccess = await clearEntityTags(entityId, apiEntityType, tagText);
+                        const isMainEntityClearSuccess = await updateEntityTags(entityId, apiEntityType, tagText, 'downvote');
 
                         // Immediately mark as stale and update label
                         markClearToggleAsStale(true);
