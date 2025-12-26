@@ -517,13 +517,12 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
 
             const newHeader = document.createElement('th');
             newHeader.classList.add('elephant-tag-col');
-            newHeader.style.cssText = `width: 20px; padding: 0;`;
+            newHeader.style.cssText = `width: 20px`;
             newHeader.title = 'Bulk Tag Recordings';
 
             const masterCheckbox = document.createElement('input');
             masterCheckbox.type = 'checkbox';
             masterCheckbox.name = 'elephant-tag-master';
-            masterCheckbox.style.cssText = `margin: 0; padding: 0; display: block; margin: 0 auto;`;
             masterCheckbox.title = 'Toggle all visible recording tags';
             masterCheckbox.checked = isToggled;
 
@@ -540,13 +539,11 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
 
                 const newCell = document.createElement('td');
                 newCell.classList.add('elephant-tag-col');
-                newCell.style.cssText = `padding: 0; text-align: center;`;
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.name = 'elephant-tag-checkbox';
                 checkbox.checked = isToggled;
-                checkbox.style.cssText = `margin: 0; padding: 0;`;
 
                 row.prepend(newCell); // Prepend new cell to the row
                 newCell.appendChild(checkbox);
