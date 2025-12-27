@@ -2,13 +2,14 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings).
-// @version      1.2
+// @version      1.3
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
 // @author       ChatGPT
 // @match        *://*.musicbrainz.org/*
-// @grant        none
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 (function () {
@@ -60,14 +61,35 @@
     // ----------------------------------------------------------------------
     // Storage Helpers
     // ----------------------------------------------------------------------
-    function getSavedTags() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_SHORTCUTS)) || []; } catch { return []; } }
-    function saveTags(tags) { localStorage.setItem(STORAGE_KEY_SHORTCUTS, JSON.stringify(tags)); }
-    function getLastSubmittedTag() { return localStorage.getItem(STORAGE_KEY_LAST_SUBMITTED) || ''; }
-    function saveLastSubmittedTag(tag) { localStorage.setItem(STORAGE_KEY_LAST_SUBMITTED, tag); }
-    function removeTagShortcut(tagToRemove) { let savedTags = getSavedTags(); savedTags = savedTags.filter(t => t !== tagToRemove); saveTags(savedTags); }
+    function getSavedTags() {
+        return GM_getValue(STORAGE_KEY_SHORTCUTS, []);
+    }
 
-    function getBulkExpandedState() { return localStorage.getItem(STORAGE_KEY_BULK_EXPANDED) === 'true'; }
-    function setBulkExpandedState(isExpanded) { localStorage.setItem(STORAGE_KEY_BULK_EXPANDED, isExpanded); }
+    function saveTags(tags) {
+        GM_setValue(STORAGE_KEY_SHORTCUTS, tags);
+    }
+
+    function getLastSubmittedTag() {
+        return GM_getValue(STORAGE_KEY_LAST_SUBMITTED, '');
+    }
+
+    function saveLastSubmittedTag(tag) {
+        GM_setValue(STORAGE_KEY_LAST_SUBMITTED, tag);
+    }
+
+    function removeTagShortcut(tagToRemove) {
+        let savedTags = getSavedTags();
+        savedTags = savedTags.filter(t => t !== tagToRemove);
+        saveTags(savedTags);
+    }
+
+    function getBulkExpandedState() {
+        return GM_getValue(STORAGE_KEY_BULK_EXPANDED, false);
+    }
+
+    function setBulkExpandedState(isExpanded) {
+        GM_setValue(STORAGE_KEY_BULK_EXPANDED, isExpanded);
+    }
 
     // ----------------------------------------------------------------------
     // UI Helpers
