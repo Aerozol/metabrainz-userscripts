@@ -604,7 +604,7 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
         let masterToggleText = null;
         let entityId = null;
 
-        const entityMatch = pathname.match(/\/(artist|release-group|release)\/([0-9a-f-]+)/i);
+        const entityMatch = pathname.match(/\/(artist|release-group|release|label|work|area|event|recording|series)\/([0-9a-f-]+)/i);
 
         if (entityMatch) {
             entityId = entityMatch[2];
@@ -1017,9 +1017,7 @@ if (pageContext === 'artist') {
             parentObserver.disconnect();
         }
 
-        const isRelevantPage = location.pathname.startsWith('/artist/') ||
-                               location.pathname.startsWith('/release-group/') ||
-                               location.pathname.startsWith('/release/');
+        const isRelevantPage = /^\/(artist|release-group|release|label|work|area|event|recording)\//.test(location.pathname);
 
         if (!isRelevantPage) return;
 
