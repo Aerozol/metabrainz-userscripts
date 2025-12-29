@@ -48,12 +48,12 @@
             setupFormContentObserver(form);
             console.log('%c[ElephantTags] Rebound UI elements successfully.', 'color: purple; font-weight: bold;');
         } else {
-             // If key elements are missing, assume full destruction and force a full re-injection
-             const existingWrapper = form.querySelector('.elephant-tags-wrapper');
-             if (existingWrapper) {
-                 existingWrapper.remove();
-             }
-             addTaggingUI();
+            // If key elements are missing, assume full destruction and force a full re-injection
+            const existingWrapper = form.querySelector('.elephant-tags-wrapper');
+            if (existingWrapper) {
+                existingWrapper.remove();
+            }
+            addTaggingUI();
         }
     }
 
@@ -219,314 +219,402 @@
     // Bulk Tagging/Clearing Functions
     // ----------------------------------------------------------------------
 
+    // ----------------------------------------------------------------------
+    // API Helpers (Official JSON & XML API)
+    // ----------------------------------------------------------------------
+
     /**
-     * Sends a request to the MusicBrainz API to upvote (tag) or downvote (clear) a tag for a given entity.
-     * @param {string} id The MBID of the entity.
-     * @param {string} type The entity type (e.g., 'release-group', 'release', 'recording').
-     * @param {string} tag The tag string to apply or clear.
-     * @param {'upvote'|'downvote'} action The action to perform.
-     * @returns {Promise<boolean>} A promise that resolves to true on success, false on failure.
+     * Submits tags for multiple entities in a single XML POST request.
+     * @param {Array<{id: string, type: string}>} entityList List of entities to tag.
+     * @param {string[]} tags List of tags to apply (or remove).
+     * @param {'upvote'|'downvote'|'withdraw'} action The vote action.
+     * @returns {Promise<boolean>} True if successful.
      */
-    async function updateEntityTags(id, type, tag, action) {
-        const requestUrl = `${location.origin}/${type}/${id}/tags/${action}?tags=${encodeURIComponent(tag)}`;
+    async function submitTagsBatch(entityList, tags, action) {
+        if (!entityList.length || !tags.length) return false;
+
+        const clientVersion = 'MusicBrainzNuclearTags-1.4';
+        const url = `${location.origin}/ws/2/tag?client=${clientVersion}`;
+
+        // Group entities by type
+        const groups = {
+            'artist': [],
+            'release-group': [],
+            'release': [],
+            'recording': []
+        };
+
+        entityList.forEach(e => {
+            if (groups[e.type]) groups[e.type].push(e.id);
+        });
+
+        // Construct XML
+        let xmlContent = '';
+        for (const [type, ids] of Object.entries(groups)) {
+            if (ids.length === 0) continue;
+
+            xmlContent += `    <${type}-list>\n`;
+            ids.forEach(id => {
+                xmlContent += `        <${type} id="${id}">\n`;
+                xmlContent += `            <user-tag-list>\n`;
+                tags.forEach(tag => {
+                    xmlContent += `                <user-tag vote="${action}"><name>${tag.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</name></user-tag>\n`;
+                });
+                xmlContent += `            </user-tag-list>\n`;
+                xmlContent += `        </${type}>\n`;
+            });
+            xmlContent += `    </${type}-list>\n`;
+        }
+
+        const xmlBody = `<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#">\n${xmlContent}</metadata>`;
+
         try {
-            const response = await fetch(requestUrl, {
-                credentials: "include",
-                method: "GET",
-                headers: { "Accept": "*/*", "X-Requested-With": "XMLHttpRequest" }
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/xml; charset=utf-8'
+                },
+                body: xmlBody
             });
 
+            const text = await response.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(text, "text/xml");
+            const message = xmlDoc.querySelector("message text")?.textContent;
+
             if (!response.ok) {
-                // **LOGGING ADDED**: Report non-successful status codes in the console.
-                console.error(`[ElephantTags - AJAX Failure] Action '${action}' failed for ${type} ${id} tag "${tag}". Status: ${response.status} ${response.statusText}. Check the Network tab for details.`);
+                console.error(`[ElephantTags] Batch ${action} failed. Status: ${response.status} ${response.statusText}`, text);
+                return false;
             }
 
-            return response.ok;
+            if (message === 'OK') {
+                console.log(`[ElephantTags] Batch ${action} successful. Server responded: ${message}`);
+                return true;
+            } else {
+                console.warn(`[ElephantTags] Batch ${action} completed with unexpected response:`, text);
+                // We return true anyway if status is 200, but warn the user.
+                // Or should we return false? strictly speaking 200 OK means success in MB.
+                // Let's stick to returning true but logging the warnings.
+                return true;
+            }
         } catch (err) {
-            console.error(`[ElephantTags - Network Error] Action '${action}' failed for ${type} ${id} tag "${tag}". Error:`, err);
+            console.error(`[ElephantTags] Batch network error:`, err);
             return false;
         }
     }
 
-    function showTagStatus(aElement, tag, isSuccess, isEntity = true, isClear = false) {
-        const statusIcon = document.createElement('span');
-        statusIcon.classList.add(isEntity ? 'rg-tag-status' : 'rec-tag-status');
-        statusIcon.style.cssText = `margin-left: 5px; font-size: 1.2em; cursor: help; vertical-align: middle;`;
-        if (isClear) {
-            // Shows a broom icon 🧹 for success, ❌ for failure
-            statusIcon.textContent = isSuccess ? '🧹' : '❌';
-            statusIcon.title = isSuccess ? `Successfully cleared tag "${tag}"` : `Failed to clear tag "${tag}". Check browser console for errors, or ensure the tag was applied to this entity.`;
-        } else {
-            statusIcon.textContent = isSuccess ? '✅' : '❌';
-            statusIcon.title = isSuccess ? `Successfully tagged with "${tag}"` : `Failed to tag with "${tag}". Check permissions/tag limits.`;
-        }
-        aElement.insertAdjacentElement('afterend', statusIcon);
-    }
-
-    async function getReleasesForRG(rgId) {
-        const rgPageUrl = `${location.origin}/release-group/${rgId}`;
-        const parser = new DOMParser();
+    /**
+     * Fetches releases for a release group using JSON API.
+     * @param {string} rgId
+     * @returns {Promise<Array<{id: string, title: string}>>}
+     */
+    async function fetchReleases(rgId) {
+        const url = `${location.origin}/ws/2/release-group/${rgId}?inc=releases&fmt=json`;
         try {
-            const response = await fetch(rgPageUrl, { credentials: "include" });
-            const html = await response.text();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            const releaseRows = doc.querySelectorAll('table.tbl:not(.medium) tbody tr');
-            const releases = [];
-
-            releaseRows.forEach(row => {
-                const link = row.querySelector('td:nth-child(2) a[href*="/release/"]');
-                if (link) {
-                    const match = link.getAttribute('href').match(/\/release\/([0-9a-f-]+)/i);
-                    if (match) {
-                        releases.push({ id: match[1], title: link.textContent.trim() });
-                    }
-                }
-            });
-            return releases;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(response.statusText);
+            const data = await response.json();
+            return data.releases.map(r => ({ id: r.id, title: r.title }));
         } catch (err) {
-            console.error(`[ElephantTags - Scrape Error] Failed to fetch releases for RG ${rgId}:`, err);
+            console.error(`[ElephantTags] Failed to fetch releases for RG ${rgId}:`, err);
             return [];
         }
     }
 
-    // MODIFIED: Added taggedRecordingIds parameter with default value for safety
-    async function fetchAndExecuteRecordingsFromRelease(releaseId, tag, action, isClear, taggedRecordingIds = new Set()) {
-        let success = 0;
-        let failure = 0;
-
-        const releasePageUrl = `${location.origin}/release/${releaseId}`;
-        const parser = new DOMParser();
-
+    /**
+     * Fetches recordings for a release using JSON API.
+     * @param {string} releaseId
+     * @returns {Promise<Array<{id: string, title: string}>>}
+     */
+    async function fetchRecordings(releaseId) {
+        const url = `${location.origin}/ws/2/release/${releaseId}?inc=recordings&fmt=json`;
         try {
-            const response = await fetch(releasePageUrl, { credentials: "include" });
-            const html = await response.text();
-            const doc = parser.parseFromString(html, 'text/html');
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(response.statusText);
+            const data = await response.json();
 
-            const recordingRows = doc.querySelectorAll('table.tbl.medium tbody tr');
-
-            for (const row of recordingRows) {
-                const recordingLink = row.querySelector('td.title a[href*="/recording/"]');
-                if (!recordingLink) continue;
-
-                const match = recordingLink.getAttribute('href').match(/\/recording\/([0-9a-f-]+)/i);
-                if (!match) continue;
-                const recordingId = match[1];
-
-                // --- OPTIMIZATION: Check if recording was already tagged ---
-                if (!isClear && taggedRecordingIds.has(recordingId)) {
-                    console.log(`[ElephantTags - Skip] Recording ${recordingId} already tagged in this batch. Skipping API call.`);
-                    success++; // Count as success since the goal is achieved
-                    continue;
-                }
-                // --- END OPTIMIZATION ---
-
-
-                const isSuccess = await updateEntityTags(recordingId, 'recording', tag, action);
-                isSuccess ? success++ : failure++;
-
-                // Add ID to the set if the tag was successful (only for tagging)
-                if (!isClear && isSuccess) {
-                    taggedRecordingIds.add(recordingId);
-                }
-            }
+            const recordings = [];
+            data.media.forEach(medium => {
+                medium.tracks.forEach(track => {
+                    if (track.recording) {
+                        recordings.push({
+                            id: track.recording.id,
+                            title: track.recording.title
+                        });
+                    }
+                });
+            });
+            return recordings;
         } catch (err) {
-            console.error(`[ElephantTags - Scrape Error] Failed to fetch or parse release page for ${releaseId}:`, err);
-            failure += 1;
         }
-
-        return { success, failure };
     }
 
- async function tagCheckedReleaseGroups(tag, actionType, isToggledRGsParam, isToggledReleasesParam, isToggledRecordingsParam) {
-    // Action function is AJAX Upvote or AJAX Downvote
-    const action = (actionType === 'tag') ? 'upvote' : 'downvote';
-    const isClear = actionType === 'clear';
+    async function tagCheckedReleaseGroups(tagInput, actionType, isToggledRGsParam, isToggledReleasesParam, isToggledRecordingsParam) {
+        const action = (actionType === 'tag') ? 'upvote' : 'withdraw';
+        const isClear = actionType === 'withdraw' || action === 'withdraw';
 
-    // --- OPTIMIZATION: Track tagged recordings globally for this cascade ---
-    const taggedRecordingIds = new Set();
-    // --- END OPTIMIZATION ---
+        // Split tags by comma
+        const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+        if (!tags.length) return;
 
-    // Select only checked checkboxes that are currently visible
-    const checkedRGs = Array.from(document.querySelectorAll('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null);
-    const totalRGs = checkedRGs.length;
+        // Select checked release groups
+        // Select checked release groups
+        const allChecked = Array.from(document.querySelectorAll(MERGE_CHECKBOX_SELECTOR + ':checked'));
+        // Filter for visibility
+        const checkedRGs = allChecked.filter(cb => cb.offsetParent !== null);
 
-    if (totalRGs === 0) { console.log("No visible release groups checked for action."); updateProgress(''); return; }
+        console.log(`[ElephantTags] Debug: Found ${allChecked.length} checked boxes. Visible: ${checkedRGs.length}`);
 
-    let rgSuccess = 0, rgFailure = 0;
-    let rlSuccess = 0, rlFailure = 0;
-    let recSuccess = 0, recFailure = 0;
-
-    for (let i = 0; i < totalRGs; i++) {
-        const checkbox = checkedRGs[i];
-        const row = checkbox.closest('tr');
-        const titleCell = row.querySelectorAll('td')[2];
-        const rgLink = titleCell.querySelector('a[href*="/release-group/"]');
-        const match = rgLink?.getAttribute('href').match(/\/release-group\/([0-9a-f-]+)/i);
-
-        if (!match) { rgFailure++; continue; }
-        const releaseGroupId = match[1];
-
-        updateProgress(`Processing RG ${i + 1}/${totalRGs}: ${isClear ? 'Clearing' : 'Tagging'} ${rgLink.textContent.trim()}...`);
-
-        // Execute AJAX and show status for the list entity (Release Group)
-        // Only execute if the RG toggle is explicitly checked (isToggledRGsParam)
-        let isRGSuccess = true;
-        if (isToggledRGsParam) {
-            rgLink.closest('td').querySelectorAll('.rg-tag-status').forEach(el => el.remove());
-            isRGSuccess = await updateEntityTags(releaseGroupId, 'release-group', tag, action);
-            isRGSuccess ? rgSuccess++ : rgFailure++;
-            if(isRGSuccess) checkbox.checked = false;
-            showTagStatus(rgLink, tag, isRGSuccess, true, isClear);
+        const totalRGs = checkedRGs.length;
+        if (totalRGs === 0) {
+            console.warn("[ElephantTags] No visible release groups checked. Selector used:", MERGE_CHECKBOX_SELECTOR);
+            updateProgress('No entities selected.');
+            return;
         }
-        // -----------------------------------------------------------------------------------------
 
-        if (isToggledReleasesParam || isToggledRecordingsParam) {
-            console.log(`%c[ElephantTags - Cascade Check] RG ${i + 1}/${totalRGs} (${releaseGroupId}): isToggledReleases=${isToggledReleasesParam}, isToggledRecordings=${isToggledRecordingsParam}`, 'color: purple; font-weight: bold;');
+        let accumulatedEntities = [];
+        const uniqueRecordingIds = new Set();
 
-            const releases = await getReleasesForRG(releaseGroupId);
-            console.log(`%c[ElephantTags - Releases Found] Fetched ${releases.length} releases for RG ${releaseGroupId}.`, 'color: orange; font-weight: bold;');
+        // --- PHASE 1: GATHER ---
+        for (let i = 0; i < totalRGs; i++) {
+            const checkbox = checkedRGs[i];
+            const row = checkbox.closest('tr');
+            const titleCell = row.querySelectorAll('td')[2];
+            const rgLink = titleCell.querySelector('a[href*="/release-group/"]');
+            const match = rgLink?.getAttribute('href').match(/\/release-group\/([0-9a-f-]+)/i);
 
-            updateProgress(`Processing RG ${i + 1}/${totalRGs}: ${isClear ? 'Clearing' : 'Tagging'} ${releases.length} Releases...`);
+            if (!match) continue;
+            const releaseGroupId = match[1];
+            const rgTitle = rgLink.textContent.trim();
 
-            for (const release of releases) {
-                // Release tagging/clearing: Only execute if the Release toggle is explicitly checked
-                let isRLSuccess = true;
-                if (isToggledReleasesParam) {
-                    isRLSuccess = await updateEntityTags(release.id, 'release', tag, action);
-                    isRLSuccess ? rlSuccess++ : rlFailure++;
+            updateProgress(`Gathering data for RG ${i + 1}/${totalRGs}: ${rgTitle}...`);
 
-                    if (isRLSuccess) {
-                        console.log(`[ElephantTags - Release Action] SUCCESS for Release ${release.title} (${release.id})`);
-                    } else {
-                        console.warn(`[ElephantTags - Release Action] FAILURE for Release ${release.title} (${release.id}). Check console logs for status code.`);
+            // 1. Add Release Group (if toggled)
+            if (isToggledRGsParam) {
+                accumulatedEntities.push({ id: releaseGroupId, type: 'release-group', title: rgTitle });
+            }
+
+            // 2. Cascade to Releases (if toggled or needed for recordings)
+            if (isToggledReleasesParam || isToggledRecordingsParam) {
+                const releases = await fetchReleases(releaseGroupId);
+
+                for (const release of releases) {
+                    // Add Release (if toggled)
+                    if (isToggledReleasesParam) {
+                        accumulatedEntities.push({ id: release.id, type: 'release', title: release.title });
+                    }
+
+                    // 3. Cascade to Recordings (if toggled)
+                    if (isToggledRecordingsParam) {
+                        const recordings = await fetchRecordings(release.id);
+                        recordings.forEach(rec => {
+                            if (!uniqueRecordingIds.has(rec.id)) {
+                                uniqueRecordingIds.add(rec.id);
+                                accumulatedEntities.push({ id: rec.id, type: 'recording', title: rec.title });
+                            }
+                        });
                     }
                 }
-
-                // Check recording toggle parameter
-                // Requires the recording toggle to be on AND a release action to have succeeded (or been skipped, as isRLSuccess is true by default if skipped)
-                if (isToggledRecordingsParam && isRLSuccess) {
-                    updateProgress(`Processing RG ${i + 1}/${totalRGs}: ${isClear ? 'Clearing' : 'Tagging'} Recordings in Release: ${release.title}...`);
-                    const recResults = await fetchAndExecuteRecordingsFromRelease(release.id, tag, action, isClear, taggedRecordingIds);
-                    recSuccess += recResults.success;
-                    recFailure += recResults.failure;
-                }
             }
         }
-    }
 
-    const summary = [
-        `RG: ${rgSuccess} ${isClear ? '🧹' : '✅'}, ${rgFailure} ❌`,
-        (isToggledReleasesParam || isToggledRecordingsParam) ? `Release: ${rlSuccess} ${isClear ? '🧹' : '✅'}, ${rlFailure} ❌` : '',
-        isToggledRecordingsParam ? `Rec: ${recSuccess} ${isClear ? '🧹' : '✅'}, ${recFailure} ❌` : ''
-    ].filter(Boolean).join(' | ');
-
-    console.log(`RG Bulk Action Summary: ${summary}`);
-    updateProgress(`RG Bulk Action Complete. ${summary}`);
-}
-
-async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isToggledRecordingsParam) {
-    // Action function is AJAX Upvote or AJAX Downvote
-    const action = (actionType === 'tag') ? 'upvote' : 'downvote';
-    const isClear = actionType === 'clear';
-
-    // --- OPTIMIZATION: Track tagged recordings globally for this cascade ---
-    const taggedRecordingIds = new Set();
-    // --- END OPTIMIZATION ---
-
-    const checkedReleases = Array.from(document.querySelectorAll('table.tbl:not(.medium) ' + MERGE_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null);
-    const totalReleases = checkedReleases.length;
-
-    if (totalReleases === 0) { console.log("No visible releases checked for action."); updateProgress(''); return; }
-
-    let rlSuccess = 0;
-    let rlFailure = 0;
-    let recSuccess = 0;
-    let recFailure = 0;
-
-    for (let i = 0; i < totalReleases; i++) {
-        const checkbox = checkedReleases[i];
-        const row = checkbox.closest('tr');
-        const titleCell = row.querySelector('td:nth-child(2)');
-        const rlLink = titleCell.querySelector('a[href*="/release/"]');
-        const match = rlLink?.getAttribute('href').match(/\/release\/([0-9a-f-]+)/i);
-
-        if (!match) { rlFailure++; continue; }
-        const releaseId = match[1];
-
-        updateProgress(`Processing Release ${i + 1}/${totalReleases}: ${isClear ? 'Clearing' : 'Tagging'} ${rlLink.textContent.trim()}...`);
-
-        // Execute AJAX and show status for the list entity (Release)
-        // Only execute if the Release toggle is explicitly checked (isToggledReleasesParam)
-        let isRLSuccess = true;
-        if (isToggledReleasesParam) {
-            rlLink.closest('td').querySelectorAll('.rg-tag-status').forEach(el => el.remove());
-            isRLSuccess = await updateEntityTags(releaseId, 'release', tag, action);
-            isRLSuccess ? rlSuccess++ : rlFailure++;
-            if(isRLSuccess) checkbox.checked = false;
-            showTagStatus(rlLink, tag, isRLSuccess, true, isClear);
+        // --- PHASE 2: SUBMIT ---
+        if (accumulatedEntities.length === 0) {
+            updateProgress('No entities gathered to tag.');
+            return;
         }
-        // -----------------------------------------------------------------------------------------
 
-        // Check recording toggle parameter
-        // Requires the recording toggle to be on AND a release action to have succeeded (or been skipped)
-        if (isToggledRecordingsParam && isRLSuccess) {
-            updateProgress(`Processing Release ${i + 1}/${totalReleases}: ${isClear ? 'Clearing' : 'Tagging'} Recordings...`);
-            const recResults = await fetchAndExecuteRecordingsFromRelease(releaseId, tag, action, isClear, taggedRecordingIds);
-            recSuccess += recResults.success;
-            recFailure += recResults.failure;
+        updateProgress(`Submitting tags for ${accumulatedEntities.length} entities...`);
+        const success = await submitTagsBatch(accumulatedEntities, tags, action);
+
+        // --- UI UPDATES ---
+        if (success) {
+            // Uncheck processed RGs
+            checkedRGs.forEach(cb => cb.checked = false);
+
+            // Add visual feedback
+            checkedRGs.forEach(cb => {
+                const link = cb.closest('tr').querySelectorAll('td')[2].querySelector('a');
+                showTagStatus(link, tags.join(', '), true, false, isClear);
+            });
+
+            const counts = { 'release-group': 0, 'release': 0, 'recording': 0 };
+            accumulatedEntities.forEach(e => counts[e.type]++);
+
+            const summary = Object.entries(counts)
+                .filter(([, count]) => count > 0)
+                .map(([type, count]) => `${type}: ${count}`)
+                .join(', ');
+
+            updateProgress(`Success! Tagged: ${summary}. Refresh to see changes.`);
+            console.log(`[ElephantTags] Batch Success: ${summary}`);
+        } else {
+            updateProgress('Batch submission failed. Check console.');
         }
     }
+    async function tagCheckedReleases(tagInput, actionType, isToggledReleasesParam, isToggledRecordingsParam) {
+        const action = (actionType === 'tag') ? 'upvote' : 'withdraw';
+        const isClear = actionType === 'withdraw' || action === 'withdraw';
 
-    const summary = [
-        `Release: ${rlSuccess} ${isClear ? '🧹' : '✅'}, ${rlFailure} ❌`,
-        isToggledRecordingsParam ? `Rec: ${recSuccess} ${isClear ? '🧹' : '✅'}, ${recFailure} ❌` : ''
-    ].filter(Boolean).join(' | ');
+        const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+        if (!tags.length) return;
 
-    console.log(`Release Bulk Action Summary: ${summary}`);
-    updateProgress(`Release Bulk Action Complete. ${summary}`);
-}
+        const checkedReleases = Array.from(document.querySelectorAll('table.tbl:not(.medium) ' + MERGE_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null);
+        const totalReleases = checkedReleases.length;
 
-    async function tagCheckedRecordings(tag, actionType) {
-        // Action function is AJAX Upvote or AJAX Downvote
-        const action = (actionType === 'tag') ? 'upvote' : 'downvote';
-        const isClear = actionType === 'clear';
+        if (totalReleases === 0) { console.log("No visible releases checked for action."); updateProgress(''); return; }
+
+        let accumulatedEntities = [];
+        const uniqueRecordingIds = new Set();
+
+        // --- PHASE 1: GATHER ---
+        for (let i = 0; i < totalReleases; i++) {
+            const checkbox = checkedReleases[i];
+            const row = checkbox.closest('tr');
+            const titleCell = row.querySelector('td:nth-child(2)');
+            const rlLink = titleCell.querySelector('a[href*="/release/"]');
+            const match = rlLink?.getAttribute('href').match(/\/release\/([0-9a-f-]+)/i);
+
+            if (!match) continue;
+            const releaseId = match[1];
+            const releaseTitle = rlLink.textContent.trim();
+
+            updateProgress(`Gathering data for Release ${i + 1}/${totalReleases}: ${releaseTitle}...`);
+
+            // 1. Add Release (if toggled)
+            if (isToggledReleasesParam) {
+                accumulatedEntities.push({ id: releaseId, type: 'release', title: releaseTitle });
+            }
+
+            // 2. Cascade to Recordings (if toggled)
+            if (isToggledRecordingsParam) {
+                const recordings = await fetchRecordings(releaseId);
+                recordings.forEach(rec => {
+                    if (!uniqueRecordingIds.has(rec.id)) {
+                        uniqueRecordingIds.add(rec.id);
+                        accumulatedEntities.push({ id: rec.id, type: 'recording', title: rec.title });
+                    }
+                });
+            }
+        }
+
+        // --- PHASE 2: SUBMIT ---
+        if (accumulatedEntities.length === 0) {
+            updateProgress('No entities gathered to tag.');
+            return;
+        }
+
+        updateProgress(`Submitting tags for ${accumulatedEntities.length} entities...`);
+        const success = await submitTagsBatch(accumulatedEntities, tags, action);
+
+        // --- UI UPDATES ---
+        if (success) {
+            checkedReleases.forEach(cb => cb.checked = false);
+            checkedReleases.forEach(cb => {
+                const link = cb.closest('tr').querySelector('td:nth-child(2) a');
+                showTagStatus(link, tags.join(', '), true, false, isClear);
+            });
+
+            const counts = { 'release': 0, 'recording': 0 };
+            accumulatedEntities.forEach(e => counts[e.type]++);
+
+            const summary = Object.entries(counts)
+                .filter(([, count]) => count > 0)
+                .map(([type, count]) => `${type}: ${count}`)
+                .join(', ');
+
+            updateProgress(`Success! Tagged: ${summary}. Refresh to see changes.`);
+        } else {
+            updateProgress('Batch submission failed. Check console.');
+        }
+    }
+
+    async function tagCheckedRecordings(tagInput, actionType) {
+        const action = (actionType === 'tag') ? 'upvote' : 'withdraw';
+        const isClear = actionType === 'withdraw' || action === 'withdraw';
+
+        const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+        if (!tags.length) return;
 
         const checkedRecordings = Array.from(document.querySelectorAll('table.tbl.medium ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null);
         const totalRecordings = checkedRecordings.length;
 
         if (totalRecordings === 0) { console.log("No visible recordings checked for action."); updateProgress(''); return; }
 
-        let successCount = 0;
-        let failureCount = 0;
+        let accumulatedEntities = [];
 
+        // --- PHASE 1: GATHER ---
         for (let i = 0; i < totalRecordings; i++) {
             const checkbox = checkedRecordings[i];
             const row = checkbox.closest('tr');
             const recordingLink = row.querySelector('td.title a[href*="/recording/"]');
 
-            if (!recordingLink) { failureCount++; continue; }
+            if (!recordingLink) continue;
             const match = recordingLink.getAttribute('href').match(/\/recording\/([0-9a-f-]+)/i);
-            if (!match) { failureCount++; continue; }
+            if (!match) continue;
             const recordingId = match[1];
+            const recordingTitle = recordingLink.textContent.trim();
 
-            updateProgress(`Processing Recording ${i + 1}/${totalRecordings}: ${isClear ? 'Clearing' : 'Tagging'} ${recordingLink.textContent.trim()}...`);
-
-            // Execute AJAX and show status for the list entity
-            recordingLink.closest('.title').querySelectorAll('.rec-tag-status').forEach(el => el.remove());
-
-            const isSuccess = await updateEntityTags(recordingId, 'recording', tag, action);
-            isSuccess ? successCount++ : failureCount++;
-
-            showTagStatus(recordingLink, tag, isSuccess, false, isClear);
-            if(isSuccess) checkbox.checked = false;
+            updateProgress(`Gathering data for Recording ${i + 1}/${totalRecordings}: ${recordingTitle}...`);
+            accumulatedEntities.push({ id: recordingId, type: 'recording', title: recordingTitle });
         }
 
-        const summary = `Rec: ${successCount} ${isClear ? '🧹' : '✅'}, ${failureCount} ❌`;
-        console.log(`Recording Bulk Action Summary: ${summary}`);
-        updateProgress(`Recording Bulk Action Complete. ${summary}`);
+        // --- PHASE 2: SUBMIT ---
+        if (accumulatedEntities.length === 0) {
+            updateProgress('No entities gathered to tag.');
+            return;
+        }
+
+        updateProgress(`Submitting tags for ${accumulatedEntities.length} recordings...`);
+        const success = await submitTagsBatch(accumulatedEntities, tags, action);
+
+        // --- UI UPDATES ---
+        if (success) {
+            checkedRecordings.forEach(cb => cb.checked = false);
+            checkedRecordings.forEach(cb => {
+                const link = cb.closest('tr').querySelector('td.title a');
+                // Remove existing status icons to prevent pile-up
+                link.closest('.title').querySelectorAll('.rec-tag-status').forEach(el => el.remove());
+                showTagStatus(link, tags.join(', '), true, false, isClear);
+            });
+
+            const summary = `Recording: ${accumulatedEntities.length}`;
+            updateProgress(`Success! Tagged: ${summary}. Refresh to see changes.`);
+            console.log(`[ElephantTags] Batch Success: ${summary}`);
+        } else {
+            updateProgress('Batch submission failed. Check console.');
+        }
     }
 
+
+
+
+    // --- UI Helper for Individual Status ---
+    function showTagStatus(element, text, success, isError, isClear) {
+        if (!element) return;
+        const existing = element.parentNode.querySelector('.rec-tag-status');
+        if (existing) existing.remove();
+
+        const span = document.createElement('span');
+        span.classList.add('rec-tag-status');
+        span.style.marginLeft = '5px';
+        span.style.fontSize = '11px';
+
+        if (isError) {
+            span.style.color = 'red';
+            span.textContent = '❌ ' + text;
+        } else if (isClear) {
+            span.style.color = '#777';
+            span.textContent = '🗑 ' + text;
+        } else if (success) {
+            span.style.color = 'green';
+            span.textContent = '✔ ' + text;
+        } else {
+            span.textContent = text;
+        }
+
+        element.parentNode.appendChild(span);
+    }
 
     // --- Recording Checkbox Injection ---
     function addRecordingCheckboxes(isToggled) {
@@ -705,9 +793,9 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
             }
 
             if (pageContext !== 'release') {
-                 recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', pageContext === 'artist' ? '40px' : '20px');
-                 recordingToggle.checkbox.checked = isToggledRecordings;
-                 toggleContainer.appendChild(recordingToggle.span);
+                recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', pageContext === 'artist' ? '40px' : '20px');
+                recordingToggle.checkbox.checked = isToggledRecordings;
+                toggleContainer.appendChild(recordingToggle.span);
             }
 
             // --- Clear Action Toggle (The single switch) ---
@@ -738,30 +826,30 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
                 }
 
                 // 2. Apply Daisy Chain Logic (Updates UI from bottom up) (DISABLED TO ALLOW FOR SELECTING SEPARATE 'LEVELS')
-             //   if (recordingToggle) {
-             //       if (isToggledRecordings) {
-             //           if (releaseToggle) {
-             //               isToggledReleases = true;
-             //               releaseToggle.checkbox.checked = true;
-             //           }
-             //           if (masterToggle) {
-             //               if (pageContext === 'release') {
-             //                   isToggledRecordings = true;
-             //               } else {
-             //                   isToggledRGs = true;
-             //               }
-             //               masterToggle.checkbox.checked = true;
-             //           }
-             //       }
-             //   }
-             //   if (releaseToggle) {
-             //       if (isToggledReleases && masterToggle) {
-             //           if (pageContext !== 'release') {
-             //               isToggledRGs = true;
-             //               masterToggle.checkbox.checked = true;
-             //           }
-             //       }
-             //   }
+                //   if (recordingToggle) {
+                //       if (isToggledRecordings) {
+                //           if (releaseToggle) {
+                //               isToggledReleases = true;
+                //               releaseToggle.checkbox.checked = true;
+                //           }
+                //           if (masterToggle) {
+                //               if (pageContext === 'release') {
+                //                   isToggledRecordings = true;
+                //               } else {
+                //                   isToggledRGs = true;
+                //               }
+                //               masterToggle.checkbox.checked = true;
+                //           }
+                //       }
+                //   }
+                //   if (releaseToggle) {
+                //       if (isToggledReleases && masterToggle) {
+                //           if (pageContext !== 'release') {
+                //               isToggledRGs = true;
+                //               masterToggle.checkbox.checked = true;
+                //           }
+                //       }
+                //   }
 
                 // 3. Sync Native Merge Checkboxes
                 const masterToggled = masterToggle.checkbox.checked;
@@ -774,11 +862,11 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
 
                 // 4. Sync Custom Recording Checkboxes (on /release/ page only)
                 if (pageContext === 'release') {
-                     document.querySelectorAll(RECORDING_CHECKBOX_SELECTOR).forEach(cb => {
-                         cb.checked = isToggledRecordings;
-                     });
-                     const masterRecToggle = document.querySelector('input[name="elephant-tag-master"]');
-                     if (masterRecToggle) masterRecToggle.checked = isToggledRecordings;
+                    document.querySelectorAll(RECORDING_CHECKBOX_SELECTOR).forEach(cb => {
+                        cb.checked = isToggledRecordings;
+                    });
+                    const masterRecToggle = document.querySelector('input[name="elephant-tag-master"]');
+                    if (masterRecToggle) masterRecToggle.checked = isToggledRecordings;
                 }
             };
 
@@ -789,7 +877,7 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
                 }
             });
 
-            updateCheckboxState();
+            // updateCheckboxState(); // DISABLED: Prevents clobbering user's manual selections on init
 
             bulkWrapper.appendChild(toggleContainer);
 
@@ -818,10 +906,10 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
                 const hasManualSelection = (
                     pageContext === 'artist' && document.querySelectorAll('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR + ':checked').length > 0
                 ) || (
-                    pageContext === 'release-group' && document.querySelectorAll('table.tbl:not(.medium) ' + MERGE_CHECKBOX_SELECTOR + ':checked').length > 0
-                ) || (
-                    pageContext === 'release' && document.querySelectorAll('table.tbl.medium ' + RECORDING_CHECKBOX_SELECTOR + ':checked').length > 0
-                );
+                        pageContext === 'release-group' && document.querySelectorAll('table.tbl:not(.medium) ' + MERGE_CHECKBOX_SELECTOR + ':checked').length > 0
+                    ) || (
+                        pageContext === 'release' && document.querySelectorAll('table.tbl.medium ' + RECORDING_CHECKBOX_SELECTOR + ':checked').length > 0
+                    );
 
                 const isBulkAction = isMasterToggled || hasManualSelection;
 
@@ -831,63 +919,64 @@ async function tagCheckedReleases(tag, actionType, isToggledReleasesParam, isTog
                 // Map page context to API entity type
                 const apiEntityType = entityMatch ? (entityMatch[1] === 'artist' ? 'artist' : entityMatch[1] === 'release-group' ? 'release-group' : 'release') : null;
 
-// --- READ CASCADE TOGGLE STATE DIRECTLY FROM DOM FOR RELIABILITY ---
-const masterChecked = masterToggle ? masterToggle.checkbox.checked : false;
+                // --- READ CASCADE TOGGLE STATE DIRECTLY FROM DOM FOR RELIABILITY ---
+                const domMaster = document.getElementById('mb-master-toggle');
+                const domRelease = document.getElementById('mb-releases-toggle');
+                const domRec = document.getElementById('mb-recordings-toggle');
 
-let isToggledRGsNow = false;
-let isToggledReleasesNow = false;
-let isToggledRecordingsNow = false;
+                const masterChecked = domMaster ? domMaster.checked : false;
 
-if (pageContext === 'artist') {
-    // Artist Page: 3 Toggles (RGs, Releases, Recordings)
-    isToggledRGsNow = masterChecked; // Master toggle controls RGs
-    isToggledReleasesNow = releaseToggle ? releaseToggle.checkbox.checked : false;
-    isToggledRecordingsNow = recordingToggle ? recordingToggle.checkbox.checked : false;
-} else if (pageContext === 'release_group') {
-    // RG Page: 2 Toggles (Releases, Recordings)
-    isToggledReleasesNow = masterChecked; // Master toggle controls Releases
-    isToggledRecordingsNow = recordingToggle ? recordingToggle.checkbox.checked : false;
-} else if (pageContext === 'release') {
-    // Release Page: 1 Toggle (Recordings)
-    isToggledRecordingsNow = masterChecked; // Master toggle controls Recordings
-}
+                let isToggledRGsNow = false;
+                let isToggledReleasesNow = false;
+                let isToggledRecordingsNow = false;
+
+                if (pageContext === 'artist') {
+                    isToggledRGsNow = masterChecked;
+                    isToggledReleasesNow = domRelease ? domRelease.checked : false;
+                    isToggledRecordingsNow = domRec ? domRec.checked : false;
+                } else if (pageContext === 'release_group') {
+                    isToggledReleasesNow = masterChecked;
+                    isToggledRecordingsNow = domRec ? domRec.checked : false;
+                } else if (pageContext === 'release') {
+                    isToggledRecordingsNow = masterChecked;
+                }
 
 
- // 1. SCENARIO: TAG (Native Upvote Flow)
-if (actionType === 'tag') {
-    // If it's just a single tag, we do nothing and allow native flow to complete instantly.
-    if (!isBulkAction) {
-        // Action finished by native click. Disable clear toggle immediately.
-        markClearToggleAsStale(false);
-        return;
-    }
+                // 1. SCENARIO: TAG (Native Upvote Flow)
+                if (actionType === 'tag') {
+                    // If it's just a single tag, we do nothing and allow native flow to complete instantly.
+                    if (!isBulkAction) {
+                        // Action finished by native click. Disable clear toggle immediately.
+                        markClearToggleAsStale(false);
+                        return;
+                    }
 
-    // If it's a bulk tag, we let the native action tag the current entity,
-    // then start our cascade immediately (no delay).
-    console.log(`[ElephantTags] Bulk TAG: Allowing native upvote. Starting cascade immediately.`);
+                    // If it's a bulk tag, we let the native action tag the current entity,
+                    // then start our cascade immediately (no delay).
+                    console.log(`[ElephantTags] Bulk TAG: Allowing native upvote. Starting cascade immediately.`);
 
-    setTimeout(async () => {
-        updateProgress(`Current entity action (native tag) complete. Starting bulk cascade...`);
+                    setTimeout(async () => {
+                        updateProgress(`Current entity action (native tag) complete. Starting bulk cascade...`);
 
-        // --- RUN CHILD BULK ACTION ---
-if (pageContext === 'artist') {
-    // PASS: RG Toggle, Releases Toggle, Recordings Toggle
-    await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
-} else if (pageContext === 'release_group') {
-    // PASS: Releases Toggle (isToggledReleasesNow is now correct), Recordings Toggle
-    await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
-} else if (pageContext === 'release') {
-    // This only runs the recording bulk action (the release itself is tagged by native flow)
-    await tagCheckedRecordings(tagText, actionType);
-}
+                        // --- RUN CHILD BULK ACTION ---
+                        if (pageContext === 'artist') {
+                            // PASS: RG Toggle, Releases Toggle, Recordings Toggle
+                            await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
+                        } else if (pageContext === 'release_group') {
+                            // PASS: Releases Toggle (isToggledReleasesNow is now correct), Recordings Toggle
+                            await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                        } else if (pageContext === 'release') {
+                            // This only runs the recording bulk action (the release itself is tagged by native flow)
+                            await tagCheckedRecordings(tagText, actionType);
+                        }
 
-        // --- UI CLEANUP ---
-        updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
-        setTimeout(() => { updateProgress(''); }, 3000);
-        markClearToggleAsStale(true); // Disable after bulk
-    }, 100); // 100ms small delay to ensure native click fires first
-    return;
-}
+                        // --- UI CLEANUP ---
+                        updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
+                        setTimeout(() => { updateProgress(''); }, 3000);
+                        markClearToggleAsStale(true); // Disable after bulk
+                    }, 100); // 100ms small delay to ensure native click fires first
+                    return;
+                }
 
 
                 // 2. SCENARIO: CLEAR (Custom Downvote Flow) - INTERRUPT native UPVOTE
@@ -906,7 +995,9 @@ if (pageContext === 'artist') {
                         updateProgress(`Clearing tag from current entity: ${tagText}...`);
 
                         // Use custom AJAX clear for current entity in the bulk path
-                        const isMainEntityClearSuccess = await updateEntityTags(entityId, apiEntityType, tagText, 'downvote');
+                        // NEW: Use submitTagsBatch logic
+                        const tags = tagText.split(',').map(t => t.trim()).filter(t => t);
+                        await submitTagsBatch([{ id: entityId, type: apiEntityType }], tags, 'withdraw');
 
                         // Immediately mark as stale and update label
                         markClearToggleAsStale(true);
@@ -914,24 +1005,21 @@ if (pageContext === 'artist') {
                         updateProgress(`Current entity action complete. Starting bulk cascade...`);
 
                         // Bulk Clear: start the cascade immediately.
-            setTimeout(async () => {
-                // --- RUN CHILD BULK ACTION (Clear) ---
-                if (pageContext === 'artist') {
-                    await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
-                } else if (pageContext === 'release_group') {
-                    // CHECK THIS LINE: ENSURE THERE IS NO COMMA AT THE END
-                    await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
-                } else if (pageContext === 'release') {
-                    // CHECK THIS LINE: ENSURE THERE IS NO COMMA AT THE END
-                    await tagCheckedRecordings(tagText, actionType);
-                } // <-- If you see a comma here, remove it.
+                        setTimeout(async () => {
+                            // --- RUN CHILD BULK ACTION (Clear) ---
+                            if (pageContext === 'artist') {
+                                await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
+                            } else if (pageContext === 'release_group') {
+                                await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                            } else if (pageContext === 'release') {
+                                await tagCheckedRecordings(tagText, actionType);
+                            }
 
-                // --- UI CLEANUP ---
-                updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
-                // This next line should end with a semicolon (;) not a comma (,)
-                setTimeout(() => { updateProgress(''); }, 3000);
+                            // --- UI CLEANUP ---
+                            updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
+                            setTimeout(() => { updateProgress(''); }, 3000);
 
-            }, 100); // 100ms small delay to ensure native click is fully cancelled.
+                        }, 100); // 100ms small delay to ensure native click is fully cancelled.
 
                     } else {
                         // --- SINGLE CLEAR: Using Robust Event Dispatch for Instant UI Update ---
@@ -994,18 +1082,18 @@ if (pageContext === 'artist') {
             formContentObserver.disconnect();
         }
 
-        formContentObserver = new MutationObserver(function(mutationsList, observer) {
+        formContentObserver = new MutationObserver(function (mutationsList, observer) {
             const wrapper = form.querySelector('.elephant-tags-wrapper');
             if (!wrapper) return;
 
             const shortcutContainer = form.querySelector('.tag-shortcuts');
             // Check for button presence, in case the tag box is cleared/re-rendered
             if (shortcutContainer && shortcutContainer.querySelectorAll('.brain-tag-button, .repeat-tag-button, .tag-shortcut-btn').length < 3) {
-                 const input = form.querySelector('input.tag-input');
-                 const submitButton = form.querySelector('button.styled-button');
-                 if (input && submitButton) {
-                     renderTagButtons(shortcutContainer, getSavedTags(), input, submitButton);
-                 }
+                const input = form.querySelector('input.tag-input');
+                const submitButton = form.querySelector('button.styled-button');
+                if (input && submitButton) {
+                    renderTagButtons(shortcutContainer, getSavedTags(), input, submitButton);
+                }
             }
         });
 
@@ -1060,7 +1148,7 @@ if (pageContext === 'artist') {
         };
 
 
-        const callback = function(mutationsList, observer) {
+        const callback = function (mutationsList, observer) {
             if (document.getElementById('tag-form') && !initialAttemptDone) {
                 scheduleChecks();
             }
