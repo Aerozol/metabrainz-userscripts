@@ -23,9 +23,9 @@
     // Custom checkbox selector for Recordings
     const RECORDING_CHECKBOX_SELECTOR = 'input[name="elephant-tag-checkbox"]';
 
-    let parentObserver = null;
     let formContentObserver = null;
-    let isAddingUI = false;
+    let mainObserver = null;
+    const injectedForms = new WeakSet();
 
     // Global state for cascading action targets (used only for initial UI state/checkbox syncing)
     let isToggledRGs = false;
@@ -34,28 +34,6 @@
     let progressDisplay = null;
 
     // --- Re-initialization Function (Non-destructive rebinding) ---
-    function rebindUIElements(form) {
-        if (!form) return;
-
-        // 1. Get the necessary elements from the potentially new DOM structure
-        const input = form.querySelector('input.tag-input');
-        const submitButton = form.querySelector('button.styled-button');
-        const shortcutContainer = form.querySelector('.tag-shortcuts');
-
-        if (input && submitButton && shortcutContainer) {
-            // 2. Simply re-render the buttons and re-bind listeners to the new input/submit elements
-            renderTagButtons(shortcutContainer, getSavedTags(), input, submitButton);
-            setupFormContentObserver(form);
-            console.log('%c[ElephantTags] Rebound UI elements successfully.', 'color: purple; font-weight: bold;');
-        } else {
-            // If key elements are missing, assume full destruction and force a full re-injection
-            const existingWrapper = form.querySelector('.elephant-tags-wrapper');
-            if (existingWrapper) {
-                existingWrapper.remove();
-            }
-            addTaggingUI();
-        }
-    }
 
 
     // ----------------------------------------------------------------------
@@ -667,22 +645,27 @@
 
     function addTaggingUI() {
 
-        isAddingUI = true;
         const form = document.getElementById('tag-form');
-        if (!form) { isAddingUI = false; return; }
+        if (!form) return;
 
-        // --- Idempotency Check ---
-        if (form.querySelector('.elephant-tags-wrapper')) {
-            // **FIX: Removed repetitive console log. Rebind and exit silently.**
-            rebindUIElements(form);
-            isAddingUI = false;
+        // --- Infinite Loop Prevention: WeakSet & DOM Check ---
+        // If we've processed this form instance AND the UI is still there, stop.
+        if (injectedForms.has(form) && form.querySelector('.elephant-tags-wrapper')) {
             return;
         }
+
+        // If the wrapper exists (even if not in WeakSet), add to set and stop.
+        if (form.querySelector('.elephant-tags-wrapper')) {
+            injectedForms.add(form);
+            return;
+        }
+
+        injectedForms.add(form);
 
         const input = form.querySelector('input.tag-input');
         const submitButton = form.querySelector('button.styled-button');
 
-        if (!input || !submitButton) { isAddingUI = false; return; }
+        if (!input || !submitButton) return;
 
         console.log('%c[ElephantTags] addTaggingUI: Injecting Custom UI...', 'color: green; font-weight: bold;');
 
@@ -1069,8 +1052,12 @@
         }
 
         // FINAL UI ASSEMBLY
+        // Temporarily disconnect observer to prevent infinite self-triggering loop
+        if (mainObserver) mainObserver.disconnect();
+
         form.appendChild(unifiedWrapper);
-        isAddingUI = false;
+
+        if (mainObserver) mainObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     // ----------------------------------------------------------------------
@@ -1082,7 +1069,7 @@
             formContentObserver.disconnect();
         }
 
-        formContentObserver = new MutationObserver(function (mutationsList, observer) {
+        formContentObserver = new MutationObserver(function () {
             const wrapper = form.querySelector('.elephant-tags-wrapper');
             if (!wrapper) return;
 
@@ -1100,77 +1087,24 @@
         formContentObserver.observe(form, { childList: true });
     }
 
-    function setupParentObserver() {
-        if (parentObserver) {
-            parentObserver.disconnect();
-        }
+    // ----------------------------------------------------------------------
+    // Main Script Initialization (Aggrsssive Observer)
+    // ----------------------------------------------------------------------
 
-        const isRelevantPage = /^\/(artist|release-group|release|label|work|area|event|recording)\//.test(location.pathname);
+    function initObserver() {
+        // Run immediately to catch if already loaded
+        addTaggingUI();
 
-        if (!isRelevantPage) return;
-
-        // Target the element that eventually holds the tag form
-        const targetNode = document.getElementById('content') || document.body;
-        let initialAttemptDone = false;
-
-        // Function to attempt injecting the UI
-        const tryAddUI = (delay, isFallback) => {
-            const form = document.getElementById('tag-form');
-            if (form) {
-                // Check for wrapper presence before running addTaggingUI
-                if (form.querySelector('.elephant-tags-wrapper')) {
-                    // UI is already present from a previous run (including the 3s run), do nothing.
-                    return;
-                }
-
-                // Only log when we are actually going to inject.
-                if (isFallback) {
-                    console.log('%c[ElephantTags] Parent Observer: FALLBACK INJECTION (10s). UI not present, injecting now.', 'color: orange; font-weight: bold;');
-                } else {
-                    console.log('%c[ElephantTags] Parent Observer: INITIAL INJECTION (3s). #tag-form detected, injecting now.', 'color: green; font-weight: bold;');
-                }
-                addTaggingUI();
-            }
-        };
-
-
-        const scheduleChecks = () => {
-            if (initialAttemptDone) return;
-            initialAttemptDone = true;
-
-            // 1. Initial attempt (3 seconds)
-            console.log('%c[ElephantTags] Parent Observer: Scheduling initial UI injection in 3000ms.', 'color: blue; font-weight: bold;');
-            setTimeout(() => tryAddUI(5000, false), 5000);
-
-            // 2. Fallback attempt (10 seconds total)
-            console.log('%c[ElephantTags] Parent Observer: Scheduling fallback UI check/injection in 10000ms.', 'color: blue; font-weight: bold;');
-            setTimeout(() => tryAddUI(10000, true), 10000);
-        };
-
-
-        const callback = function (mutationsList, observer) {
-            if (document.getElementById('tag-form') && !initialAttemptDone) {
-                scheduleChecks();
-            }
-        };
-
-        parentObserver = new MutationObserver(callback);
-        // We observe the main content area for the tag form to appear (and re-appear)
-        parentObserver.observe(targetNode, { childList: true, subtree: true });
-
-        // Check if form is present on page load (before observer triggers)
-        if (document.getElementById('tag-form')) {
-            scheduleChecks();
-        }
+        // Continuous observation to handle dynamic content loads (e.g. React/htmx updates)
+        mainObserver = new MutationObserver(() => {
+            addTaggingUI();
+        });
+        mainObserver.observe(document.body, { childList: true, subtree: true });
     }
 
-    // ----------------------------------------------------------------------
-    // Main Script Initialization
-    // ----------------------------------------------------------------------
-
     if (document.readyState !== 'loading') {
-        setupParentObserver();
+        initObserver();
     } else {
-        window.addEventListener('DOMContentLoaded', setupParentObserver);
+        window.addEventListener('DOMContentLoaded', initObserver);
     }
 })();
