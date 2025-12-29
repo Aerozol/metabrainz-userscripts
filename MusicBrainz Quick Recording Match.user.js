@@ -2,7 +2,7 @@
 // @name        MusicBrainz Quick Recording Match
 // @namespace   https://github.com/Aerozol/metabrainz-userscripts
 // @description Select the first recording search result for each track, in the release editor Recordings tab.
-// @version     5.17
+// @version     5.18
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @license     MIT
@@ -429,31 +429,43 @@
                 setTimeout(() => {
                     const nextButton = document.querySelector('#recording-assoc-bubble button[data-click="nextTrack"]');
 
-                    if (matchingMethod === 'suggested') {
-                        const firstSuggested = document.querySelector('#recording-assoc-bubble input[data-change="recording"]');
-                        if (firstSuggested) {
-                            firstSuggested.click();
-                            console.log(`MusicBrainz Quick Tools: Selected first suggested recording for track ${currentIndex + 1}.`);
-                            setTimeout(() => {
-                                const confidence = getConfidenceLevel(trackRow);
-                                if (confidence && shouldIgnore(confidence)) {
-                                    console.log(`MusicBrainz Quick Tools: Match has confidence '${confidence}', ignoring.`);
-                                    const addNewRecordingButton = document.querySelector('#recording-assoc-bubble #add-new-recording');
-                                    if (addNewRecordingButton) {
-                                        addNewRecordingButton.click();
-                                    }
-                                }
-                                if (nextButton) nextButton.click();
-                                currentIndex++;
-                                processNextTrack();
-                            }, 100);
-                        } else {
-                            console.log(`MusicBrainz Quick Tools: No suggested recordings for track ${currentIndex + 1}. Moving to next track.`);
-                            if (nextButton) nextButton.click();
-                            currentIndex++;
-                            processNextTrack();
-                        }
-                    } else if (matchingMethod === 'search') {
+if (matchingMethod === 'suggested') {
+    let attempts = 0;
+    const maxAttempts = 30; // Maximum wait of 3 seconds (30 * 100ms)
+
+    const pollSuggested = setInterval(() => {
+        const firstSuggested = document.querySelector('#recording-assoc-bubble input[data-change="recording"]');
+        const nextButton = document.querySelector('#recording-assoc-bubble button[data-click="nextTrack"]');
+
+        attempts++;
+
+        if (firstSuggested) {
+            // Found a suggestion! Stop waiting and click it immediately
+            clearInterval(pollSuggested);
+            firstSuggested.click();
+            console.log(`MusicBrainz Quick Tools: Selected suggested recording for track ${currentIndex + 1} after ${attempts * 100}ms.`);
+
+            setTimeout(() => {
+                const confidence = getConfidenceLevel(trackRow);
+                if (confidence && shouldIgnore(confidence)) {
+                    const addNewRecordingButton = document.querySelector('#recording-assoc-bubble #add-new-recording');
+                    if (addNewRecordingButton) addNewRecordingButton.click();
+                }
+                if (nextButton) nextButton.click();
+                currentIndex++;
+                processNextTrack();
+            }, 100);
+        } else if (attempts >= maxAttempts) {
+            // Reached timeout and no suggestion appeared
+            clearInterval(pollSuggested);
+            console.log(`MusicBrainz Quick Tools: No suggested recordings found for track ${currentIndex + 1} after 3 seconds.`);
+            if (nextButton) nextButton.click();
+            currentIndex++;
+            processNextTrack();
+        }
+    }, 100); // Check every 100ms
+}
+                     else if (matchingMethod === 'search') {
                         const searchIcon = document.querySelector('#recording-assoc-bubble img.search');
                         if (searchIcon) {
                             searchIcon.click();
@@ -566,35 +578,15 @@
         });
     }
 
-    window.addEventListener('load', () => {
-        const recordingsTabContent = document.getElementById('recordings');
-        if (!recordingsTabContent) {
-            console.error("MusicBrainz Quick Tools Debug: Could not find the #recordings element.");
-            return;
-        }
+function initializeQuickTools() {
+    const recordingsTabContent = document.getElementById('recordings');
 
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'aria-hidden') {
-                    const isTabActive = mutation.target.getAttribute('aria-hidden') === 'false';
-                    if (isTabActive) {
-                        addQuickToolsButtons();
-                        highlightAllDifferences();
-                    } else {
-                        removeQuickToolsButtons();
-                    }
-                }
-            });
-        });
-
-        console.log("MusicBrainz Quick Tools Debug: Initializing MutationObserver on the #recordings element's attributes.");
-        observer.observe(recordingsTabContent, { attributes: true });
-
-        if (recordingsTabContent.getAttribute('aria-hidden') === 'false') {
-            addQuickToolsButtons();
-            highlightAllDifferences();
-        }
-    });
+    // Only proceed if the recordings element exists and is currently visible
+    if (recordingsTabContent && recordingsTabContent.getAttribute('aria-hidden') === 'false') {
+        addQuickToolsButtons();
+        highlightAllDifferences();
+    }
+}
 
     document.body.addEventListener('click', (event) => {
         const target = event.target;
@@ -660,5 +652,21 @@
         container.appendChild(select);
         return container;
     }
+
+    // This observer ensures the script runs even if the page content loads late
+const globalObserver = new MutationObserver(() => {
+    initializeQuickTools();
+});
+
+// Watch the entire document for changes to elements or attributes (like aria-hidden)
+globalObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-hidden']
+});
+
+// Also try an immediate execution in case it's already loaded
+initializeQuickTools();
 
 })();
