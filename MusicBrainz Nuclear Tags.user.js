@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings).
-// @version      1.5-beta
+// @version      1.6-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -287,84 +287,135 @@
     // ----------------------------------------------------------------------
 
     /**
-     * Submits tags for multiple entities in a single XML POST request.
+     * Submits tags for multiple entities in chunks.
      * @param {Array<{id: string, type: string}>} entityList List of entities to tag.
      * @param {string[]} tags List of tags to apply (or remove).
      * @param {'upvote'|'downvote'|'withdraw'} action The vote action.
-     * @returns {Promise<boolean>} True if successful.
+     * @returns {Promise<boolean>} True if ALL chunks were successful.
      */
     async function submitTagsBatch(entityList, tags, action) {
         if (!entityList.length || !tags.length) return false;
 
-        const clientVersion = 'MusicBrainzNuclearTags-1.4';
+        const clientVersion = 'MusicBrainzNuclearTags-1.5';
         const url = `${location.origin}/ws/2/tag?client=${clientVersion}`;
+        const CHUNK_SIZE = 200;
 
-        // Group entities by type
-        const groups = {
-            'artist': [],
-            'release-group': [],
-            'release': [],
-            'recording': [],
-            'label': []
-        };
+        // Chunk the entities
+        const chunks = [];
+        for (let i = 0; i < entityList.length; i += CHUNK_SIZE) {
+            chunks.push(entityList.slice(i, i + CHUNK_SIZE));
+        }
 
-        entityList.forEach(e => {
-            if (groups[e.type]) groups[e.type].push(e.id);
-        });
+        console.log(`[ElephantTags] Batch Submission: Processing ${entityList.length} entities in ${chunks.length} chunks.`);
+        let allSuccess = true;
 
-        // Construct XML
-        let xmlContent = '';
-        for (const [type, ids] of Object.entries(groups)) {
-            if (ids.length === 0) continue;
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
 
-            xmlContent += `    <${type}-list>\n`;
-            ids.forEach(id => {
-                xmlContent += `        <${type} id="${id}">\n`;
-                xmlContent += `            <user-tag-list>\n`;
-                tags.forEach(tag => {
-                    xmlContent += `                <user-tag vote="${action}"><name>${tag.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</name></user-tag>\n`;
+            if (i > 0) {
+                updateProgress(`Batch processing: Chunk ${i + 1}/${chunks.length} (waiting)...`);
+                await delay(1100); // Rate limit between chunks
+            }
+
+            // Group entities by type
+            const groups = {
+                'artist': [],
+                'release-group': [],
+                'release': [],
+                'recording': [],
+                'label': []
+            };
+
+            chunk.forEach(e => {
+                if (groups[e.type]) groups[e.type].push(e.id);
+            });
+
+            // Construct XML
+            let xmlContent = '';
+            for (const [type, ids] of Object.entries(groups)) {
+                if (ids.length === 0) continue;
+
+                xmlContent += `    <${type}-list>\n`;
+                ids.forEach(id => {
+                    xmlContent += `        <${type} id="${id}">\n`;
+                    xmlContent += `            <user-tag-list>\n`;
+                    tags.forEach(tag => {
+                        xmlContent += `                <user-tag vote="${action}"><name>${tag.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</name></user-tag>\n`;
+                    });
+                    xmlContent += `            </user-tag-list>\n`;
+                    xmlContent += `        </${type}>\n`;
                 });
-                xmlContent += `            </user-tag-list>\n`;
-                xmlContent += `        </${type}>\n`;
-            });
-            xmlContent += `    </${type}-list>\n`;
-        }
-
-        const xmlBody = `<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#">\n${xmlContent}</metadata>`;
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/xml; charset=utf-8'
-                },
-                body: xmlBody
-            });
-
-            const text = await response.text();
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(text, "text/xml");
-            const message = xmlDoc.querySelector("message text")?.textContent;
-
-            if (!response.ok) {
-                console.error(`[ElephantTags] Batch ${action} failed. Status: ${response.status} ${response.statusText}`, text);
-                return false;
+                xmlContent += `    </${type}-list>\n`;
             }
 
-            if (message === 'OK') {
-                console.log(`[ElephantTags] Batch ${action} successful. Server responded: ${message}`);
-                return true;
-            } else {
-                console.warn(`[ElephantTags] Batch ${action} completed with unexpected response:`, text);
-                // We return true anyway if status is 200, but warn the user.
-                // Or should we return false? strictly speaking 200 OK means success in MB.
-                // Let's stick to returning true but logging the warnings.
-                return true;
+            const xmlBody = `<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#">\n${xmlContent}</metadata>`;
+
+            let chunkSuccess = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    updateProgress(`Batch processing: Chunk ${i + 1}/${chunks.length}${attempt > 1 ? ` (Attempt ${attempt})` : ''}...`);
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/xml; charset=utf-8'
+                        },
+                        body: xmlBody
+                    });
+
+                    const text = await response.text();
+
+                    if (!response.ok) {
+                        // If it's a 503 or 429 or 504, we definitely want to retry.
+                        // Actually let's retry on any non-2xx for safety in this context,
+                        // as we are doing chunks.
+                        // But if it's 400 (Bad Request) maybe not?
+                        // MusicBrainz 504 is common for heavy loads.
+                        const isRetryable = response.status >= 500 || response.status === 429;
+
+                        if (isRetryable && attempt < 3) {
+                            console.warn(`[ElephantTags] Chunk ${i + 1} failed (Status ${response.status}). Retrying...`);
+                            await delay(2000 * attempt); // Progressive backoff
+                            continue;
+                        }
+
+                        console.error(`[ElephantTags] Chunk ${i + 1} failed permanently. Status: ${response.status} ${response.statusText}`, text);
+                        chunkSuccess = false;
+                        break; // Stop retrying this chunk
+                    }
+
+                    // Parse XML check
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(text, "text/xml");
+                    const message = xmlDoc.querySelector("message text")?.textContent;
+
+                    if (message === 'OK') {
+                        console.log(`[ElephantTags] Chunk ${i + 1} successful.`);
+                        chunkSuccess = true;
+                        break; // Success!
+                    } else {
+                        console.warn(`[ElephantTags] Chunk ${i + 1} OK but unexpected response body:`, text);
+                        chunkSuccess = true; // Still count as success?
+                        break;
+                    }
+
+                } catch (err) {
+                    console.error(`[ElephantTags] Chunk ${i + 1} network error (Attempt ${attempt}):`, err);
+                    if (attempt < 3) {
+                        await delay(2000 * attempt);
+                    } else {
+                        chunkSuccess = false;
+                    }
+                }
             }
-        } catch (err) {
-            console.error(`[ElephantTags] Batch network error:`, err);
-            return false;
+
+            if (!chunkSuccess) {
+                allSuccess = false;
+                // keep going to try other chunks? Yes.
+            }
         }
+
+        return allSuccess;
     }
 
     /**
