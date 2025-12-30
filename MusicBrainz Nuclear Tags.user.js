@@ -183,19 +183,9 @@
         const clearCheckbox = document.getElementById('mb-clear-action');
 
         if (clearLabel && clearCheckbox) {
-            console.log('%c[ElephantTags] Mark toggle as stale: Applying visual changes.', 'color: #777;');
-
-            // Apply visual changes: Only indicate refresh required if bulk action was performed
-            const message = `actioned${isBulkAction ? ' (refresh required)' : ''}`;
-            clearLabel.textContent = message; // Force update
-            clearLabel.style.setProperty('color', '#777', 'important');
-            clearLabel.style.setProperty('text-decoration', 'line-through', 'important');
-
-            // Disable the checkbox and uncheck it
-            clearCheckbox.checked = false;
-            clearCheckbox.disabled = true;
-        } else {
-            console.warn('[ElephantTags] Mark toggle as stale: Could not find clear toggle elements.');
+            console.log('%c[ElephantTags] Mark toggle as stale: Updating visuals (skipped text change per user request).', 'color: #777;');
+            // We DO NOT change the text anymore, so users don't get confused.
+            // We DO NOT disable the checkbox anymore, allowing users to switch it and submit again (Undo).
         }
     }
 
@@ -579,7 +569,7 @@
 
         // 4. UI Update
         if (success) {
-            visibleChecked.forEach(cb => cb.checked = false);
+            // visibleChecked.forEach(cb => cb.checked = false);
             visibleChecked.forEach(cb => {
                 const row = cb.closest('tr');
                 // Use generic link finder again for status icons
@@ -1125,38 +1115,36 @@
                         }, 100); // 100ms small delay to ensure native click is fully cancelled.
 
                     } else {
-                        // --- SINGLE CLEAR: Using Robust Event Dispatch for Instant UI Update ---
+                        // --- SINGLE CLEAR: Using Text Match ---
                         console.log(`[ElephantTags] SINGLE CLEAR: Intercepting native upvote and performing native downvote click for instant UI update.`);
                         updateProgress(`Clearing tag from current entity: ${tagText}...`);
 
-                        const encodedTag = encodeURIComponent(tagText.trim());
-                        // Find the tag link element in the sidebar (genre or other tags)
-                        const tagLink = document.querySelector(`.sidebar-tags a[href='/tag/${encodedTag}']`);
+                        const tagsToClear = tagText.split(',').map(t => t.trim()).filter(t => t);
 
-                        if (tagLink) {
-                            const downvoteButton = tagLink.closest('li')?.querySelector('.tag-downvote');
+                        tagsToClear.forEach(t => {
+                            let tagLink = null;
 
-                            if (downvoteButton) {
-                                // Create a robust MouseEvent to ensure React/Vue handles it correctly
-                                const event = new MouseEvent('click', {
-                                    view: window,
-                                    bubbles: true,
-                                    cancelable: true,
-                                    // Make it look like a real user click
-                                    clientX: 0,
-                                    clientY: 0,
-                                    button: 0 // Left mouse button
-                                });
-
-                                // Dispatch the event instead of using the simple .click()
-                                downvoteButton.dispatchEvent(event);
-                                console.log(`[ElephantTags] SINGLE CLEAR: Dispatched simulated MouseEvent on native downvote button for "${tagText}". SUCCESS (UI should update instantly).`);
-                            } else {
-                                console.log(`[ElephantTags] SINGLE CLEAR: Tag found but downvote button not present (tag not upvoted by user). No action needed.`);
+                            const sidebarLinks = document.querySelectorAll('#sidebar a');
+                            for (const link of sidebarLinks) {
+                                if (link.textContent.trim() === t) {
+                                    tagLink = link;
+                                    break;
+                                }
                             }
-                        } else {
-                            console.log(`[ElephantTags] SINGLE CLEAR: Tag not found in sidebar list. No action needed.`);
-                        }
+
+                            if (tagLink) {
+                                const downvoteButton = tagLink.closest('li')?.querySelector('.tag-downvote');
+
+                                if (downvoteButton && !downvoteButton.disabled) {
+                                    downvoteButton.click();
+                                    console.log(`[ElephantTags] SINGLE CLEAR: Clicked native downvote for "${t}". SUCCESS.`);
+                                } else {
+                                    console.log(`[ElephantTags] SINGLE CLEAR: Tag "${t}" found but downvote button not present/enabled.`);
+                                }
+                            } else {
+                                console.log(`[ElephantTags] SINGLE CLEAR: Tag "${t}" not found in sidebar list.`);
+                            }
+                        });
 
                         // Action complete, disable the toggle and clear the progress message
                         markClearToggleAsStale(false);
