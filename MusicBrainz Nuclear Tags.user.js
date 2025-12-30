@@ -10,6 +10,7 @@
 // @match        *://*.musicbrainz.org/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_addStyle
 // ==/UserScript==
 
 (function () {
@@ -22,6 +23,95 @@
     const MERGE_CHECKBOX_SELECTOR = 'input[name="add-to-merge"]';
     // Custom checkbox selector for Recordings
     const RECORDING_CHECKBOX_SELECTOR = 'input[name="elephant-tag-checkbox"]';
+
+    // ----------------------------------------------------------------------
+    // CSS Injection
+    // ----------------------------------------------------------------------
+    const CSS = `
+        .elephant-tags-wrapper {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px;
+            margin-top: 6px;
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .tag-shortcuts {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            margin-bottom: 4px;
+        }
+        .nuclear-tag-btn {
+            font-size: 11px;
+            height: 22px;
+            padding: 2px 6px;
+            margin: 2px 4px 2px 0;
+            background-color: #eee;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .nuclear-tag-btn:hover { background-color: #ddd; }
+        .tag-shortcut-btn { background-color: #f8f8f8; }
+        .tag-shortcut-btn:hover { background-color: #eee; }
+        .brain-tag-button { background-color: #eee; }
+        .repeat-tag-button.disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .nuclear-bulk-wrapper {
+            border-top: 1px dashed #ddd;
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+        .nuclear-collapse-btn {
+            width: 100%;
+            text-align: left;
+            font-size: 11px;
+            padding: 4px 6px;
+            margin: 0;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .nuclear-collapse-btn:hover { background-color: #e8e8e8; }
+        .nuclear-toggle-container {
+            width: 100%;
+            padding-top: 4px;
+        }
+        .nuclear-toggle-row {
+            display: flex;
+            align-items: center;
+            margin: 2px 0;
+            font-size: 11px;
+            font-weight: normal;
+        }
+        .nuclear-label {
+            margin-left: 4px;
+            cursor: pointer;
+        }
+        .nuclear-clear-wrapper {
+            border-top: 1px dashed #ddd;
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+        .nuclear-progress {
+            margin-top: 4px;
+            font-size: 11px;
+            font-style: italic;
+            color: #555;
+            display: none;
+        }
+        .nuclear-status {
+            margin-left: 5px;
+            font-size: 11px;
+        }
+        .elephant-tag-col { width: 20px; }
+    `;
+
+    GM_addStyle(CSS);
 
     let formContentObserver = null;
     let mainObserver = null;
@@ -141,8 +231,7 @@
         const brainButton = document.createElement('button');
         brainButton.textContent = '🧠';
         brainButton.title = 'Submit and remember tags. Ctrl+click to remove a remembered tag.';
-        brainButton.classList.add('brain-tag-button');
-        brainButton.style.cssText = `font-size: 11px; height: 22px; padding: 2px 6px; margin: 2px 4px 2px 0; background-color: #eee; color: #333; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;`;
+        brainButton.classList.add('nuclear-tag-btn', 'brain-tag-button');
         brainButton.addEventListener('click', function (e) {
             e.preventDefault();
             const tagText = input.value.trim();
@@ -158,8 +247,8 @@
         const repeatButton = document.createElement('button');
         repeatButton.textContent = '🔄';
         repeatButton.title = lastTag ? `Apply last submitted tag: "${lastTag}"` : 'No previous tag to apply.';
-        repeatButton.classList.add('repeat-tag-button');
-        repeatButton.style.cssText = `font-size: 11px; height: 22px; padding: 2px 6px; margin: 2px 4px 2px 0; background-color: #eee; color: #333; border: 1px solid #ccc; border-radius: 4px; ${!lastTag ? 'opacity: 0.5; cursor: not-allowed;' : 'cursor: pointer;'}`;
+        repeatButton.classList.add('nuclear-tag-btn', 'repeat-tag-button');
+        if (!lastTag) repeatButton.classList.add('disabled');
         if (lastTag) {
             repeatButton.addEventListener('click', function (e) {
                 e.preventDefault();
@@ -175,8 +264,7 @@
             const btn = document.createElement('button');
             btn.textContent = tag.substring(0, 3);
             btn.title = tag;
-            btn.classList.add('tag-shortcut-btn');
-            btn.style.cssText = `font-size: 11px; height: 22px; padding: 2px 6px; margin: 2px 4px 2px 0; background-color: #f8f8f8; color: #333; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;`;
+            btn.classList.add('nuclear-tag-btn', 'tag-shortcut-btn');
             btn.addEventListener('click', function (e) {
                 e.preventDefault();
                 if (e.ctrlKey) {
@@ -749,9 +837,7 @@
         if (existing) existing.remove();
 
         const span = document.createElement('span');
-        span.classList.add('rec-tag-status');
-        span.style.marginLeft = '5px';
-        span.style.fontSize = '11px';
+        span.classList.add('nuclear-status', 'rec-tag-status');
 
         if (isError) {
             span.style.color = 'red';
@@ -780,7 +866,6 @@
 
             const newHeader = document.createElement('th');
             newHeader.classList.add('elephant-tag-col');
-            newHeader.style.cssText = `width: 20px`;
             newHeader.title = 'Bulk Tag Recordings';
 
             const masterCheckbox = document.createElement('input');
@@ -881,12 +966,10 @@
         // 1. Create the main UI wrapper
         const unifiedWrapper = document.createElement('div');
         unifiedWrapper.className = 'elephant-tags-wrapper';
-        unifiedWrapper.style.cssText = `border: 1px solid #ccc; border-radius: 4px; padding: 4px; margin-top: 6px; display: block; width: 100%; box-sizing: border-box;`;
 
         // 2. Add the Tag Shortcut Buttons container
         const shortcutContainer = document.createElement('div');
         shortcutContainer.className = 'tag-shortcuts';
-        shortcutContainer.style.cssText = `display: flex; flex-wrap: wrap; align-items: flex-start; margin-bottom: 4px;`;
         unifiedWrapper.appendChild(shortcutContainer);
 
         renderTagButtons(shortcutContainer, getSavedTags(), input, submitButton);
@@ -903,17 +986,17 @@
 
             // --- Bulk UI Wrapper (The Collapsible Part) ---
             const bulkWrapper = document.createElement('div');
-            bulkWrapper.style.cssText = `border-top: 1px dashed #ddd; margin-top: 4px; padding-top: 4px;`;
+            bulkWrapper.className = 'nuclear-bulk-wrapper';
 
             // --- Collapse Button ---
             const collapseButton = document.createElement('button');
+            collapseButton.className = 'nuclear-collapse-btn';
             collapseButton.textContent = `Nuclear Options (Bulk Actions) ${isBulkExpanded ? '▲' : '▼'}`;
-            collapseButton.style.cssText = `width: 100%; text-align: left; font-size: 11px; padding: 4px 6px; margin: 0; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;`;
 
             // --- Toggle Container (Holds the checkboxes) ---
             const toggleContainer = document.createElement('div');
-            toggleContainer.className = 'bulk-toggle-chain';
-            toggleContainer.style.cssText = `width: 100%; display: ${isBulkExpanded ? 'block' : 'none'}; padding-top: 4px;`;
+            toggleContainer.className = 'nuclear-toggle-container bulk-toggle-chain';
+            toggleContainer.style.display = isBulkExpanded ? 'block' : 'none';
 
             collapseButton.onclick = (e) => {
                 e.preventDefault();
@@ -928,7 +1011,8 @@
             // --- Checkbox Creation Helper ---
             const createCheckboxToggle = (id, text, margin) => {
                 const span = document.createElement('span');
-                span.style.cssText = `display: flex; align-items: center; margin: 2px 0; font-size: 11px; font-weight: normal; margin-left: ${margin};`;
+                span.className = 'nuclear-toggle-row';
+                span.style.marginLeft = margin;
 
                 const checkbox = document.createElement('input');
                 checkbox.setAttribute('type', 'checkbox');
@@ -936,10 +1020,9 @@
                 checkbox.classList.add('toggle-rg-checkbox');
 
                 const label = document.createElement('label');
+                label.className = 'nuclear-label';
                 label.setAttribute('for', id);
                 label.textContent = text;
-                label.style.marginLeft = '4px';
-                label.style.cursor = 'pointer';
 
                 span.appendChild(checkbox);
                 span.appendChild(label);
@@ -976,7 +1059,7 @@
 
             // --- Clear Action Toggle (The single switch) ---
             const clearToggleWrapper = document.createElement('div');
-            clearToggleWrapper.style.cssText = `border-top: 1px dashed #ddd; margin-top: 4px; padding-top: 4px;`;
+            clearToggleWrapper.className = 'nuclear-clear-wrapper';
             const clearToggle = createCheckboxToggle('mb-clear-action', 'Clear instead of tag', '0px');
             clearToggle.label.style.color = '#777';
             clearToggleWrapper.appendChild(clearToggle.span);
@@ -1061,8 +1144,7 @@
 
             // --- Progress Display ---
             progressDisplay = document.createElement('div');
-            progressDisplay.className = 'tag-progress-reporter';
-            progressDisplay.style.cssText = `margin-top: 4px; font-size: 11px; font-style: italic; color: #555; display: none;`;
+            progressDisplay.className = 'nuclear-progress tag-progress-reporter';
             bulkWrapper.appendChild(progressDisplay);
 
             unifiedWrapper.appendChild(bulkWrapper);
