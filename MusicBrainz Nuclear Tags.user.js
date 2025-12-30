@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings).
-// @version      1.4-beta
+// @version      1.5-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -400,7 +400,7 @@
     async function fetchReleases(rgId) {
         if (rgReleaseCache.has(rgId)) {
             console.log(`[ElephantTags] Helper: Returning cached releases for RG ${rgId}`);
-            return rgReleaseCache.get(rgId);
+            return { items: rgReleaseCache.get(rgId), isCached: true };
         }
 
         const url = `${location.origin}/ws/2/release-group/${rgId}?inc=releases&fmt=json`;
@@ -411,10 +411,10 @@
             const releases = data.releases.map(r => ({ id: r.id, title: r.title }));
 
             rgReleaseCache.set(rgId, releases); // Cache result
-            return releases;
+            return { items: releases, isCached: false };
         } catch (err) {
             console.error(`[ElephantTags] Failed to fetch releases for RG ${rgId}:`, err);
-            return [];
+            return { items: [], isCached: false };
         }
     }
 
@@ -426,7 +426,7 @@
     async function fetchRecordings(releaseId) {
         if (releaseRecordingCache.has(releaseId)) {
             console.log(`[ElephantTags] Helper: Returning cached recordings for Release ${releaseId}`);
-            return releaseRecordingCache.get(releaseId);
+            return { items: releaseRecordingCache.get(releaseId), isCached: true };
         }
 
         const url = `${location.origin}/ws/2/release/${releaseId}?inc=recordings&fmt=json`;
@@ -452,10 +452,10 @@
             }
 
             releaseRecordingCache.set(releaseId, recordings); // Cache result
-            return recordings;
+            return { items: recordings, isCached: false };
         } catch (err) {
             console.error(`[ElephantTags] Failed to fetch recordings for Release ${releaseId}:`, err);
-            return [];
+            return { items: [], isCached: false };
         }
     }
 
@@ -525,16 +525,16 @@
             // Cascade: RG -> Release
             // (Only relevant if root is release-group)
             if (rootEntityType === 'release-group' && (cascade.releases || cascade.recordings)) {
-                const releases = await fetchReleases(rootId);
-                await delay(1000); // Rate limit
+                const { items: releases, isCached: releasesCached } = await fetchReleases(rootId);
+                if (!releasesCached) await delay(1000); // Rate limit
 
                 for (const release of releases) {
                     if (cascade.releases) {
                         accumulatedEntities.push({ id: release.id, type: 'release', title: release.title });
                     }
                     if (cascade.recordings) {
-                        const recordings = await fetchRecordings(release.id);
-                        await delay(1000); // Rate limit
+                        const { items: recordings, isCached: recsCached } = await fetchRecordings(release.id);
+                        if (!recsCached) await delay(1000); // Rate limit
                         recordings.forEach(rec => {
                             if (!uniqueRecordingIds.has(rec.id)) {
                                 uniqueRecordingIds.add(rec.id);
@@ -547,8 +547,8 @@
             // Cascade: Release -> Recording
             // (Relevant if root is release)
             else if (rootEntityType === 'release' && cascade.recordings) {
-                const recordings = await fetchRecordings(rootId);
-                await delay(1000); // Rate limit
+                const { items: recordings, isCached: recsCached } = await fetchRecordings(rootId);
+                if (!recsCached) await delay(1000); // Rate limit
                 recordings.forEach(rec => {
                     if (!uniqueRecordingIds.has(rec.id)) {
                         uniqueRecordingIds.add(rec.id);
