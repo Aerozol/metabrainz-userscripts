@@ -172,6 +172,9 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    const rgReleaseCache = new Map();
+    const releaseRecordingCache = new Map();
+
     /**
      * Disables and restyles the 'Clear instead of tag' toggle after an action is executed.
      */
@@ -405,12 +408,20 @@
      * @returns {Promise<Array<{id: string, title: string}>>}
      */
     async function fetchReleases(rgId) {
+        if (rgReleaseCache.has(rgId)) {
+            console.log(`[ElephantTags] Helper: Returning cached releases for RG ${rgId}`);
+            return rgReleaseCache.get(rgId);
+        }
+
         const url = `${location.origin}/ws/2/release-group/${rgId}?inc=releases&fmt=json`;
         try {
             const response = await fetchWithRetry(url);
             if (!response.ok) throw new Error(response.statusText);
             const data = await response.json();
-            return data.releases.map(r => ({ id: r.id, title: r.title }));
+            const releases = data.releases.map(r => ({ id: r.id, title: r.title }));
+
+            rgReleaseCache.set(rgId, releases); // Cache result
+            return releases;
         } catch (err) {
             console.error(`[ElephantTags] Failed to fetch releases for RG ${rgId}:`, err);
             return [];
@@ -423,6 +434,11 @@
      * @returns {Promise<Array<{id: string, title: string}>>}
      */
     async function fetchRecordings(releaseId) {
+        if (releaseRecordingCache.has(releaseId)) {
+            console.log(`[ElephantTags] Helper: Returning cached recordings for Release ${releaseId}`);
+            return releaseRecordingCache.get(releaseId);
+        }
+
         const url = `${location.origin}/ws/2/release/${releaseId}?inc=recordings&fmt=json`;
         try {
             const response = await fetchWithRetry(url);
@@ -444,6 +460,8 @@
                     }
                 });
             }
+
+            releaseRecordingCache.set(releaseId, recordings); // Cache result
             return recordings;
         } catch (err) {
             console.error(`[ElephantTags] Failed to fetch recordings for Release ${releaseId}:`, err);
