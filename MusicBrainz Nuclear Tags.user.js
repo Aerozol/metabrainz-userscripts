@@ -78,6 +78,10 @@
         progressDisplay.style.display = message ? 'block' : 'none';
     }
 
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     /**
      * Disables and restyles the 'Clear instead of tag' toggle after an action is executed.
      */
@@ -283,6 +287,31 @@
     }
 
     /**
+     * Retries a fetch operation with exponential backoff.
+     * @param {string} url
+     * @param {number} retries
+     * @param {number} backoff
+     */
+    async function fetchWithRetry(url, retries = 3, backoff = 1000) {
+        for (let i = 0; i <= retries; i++) {
+            try {
+                const response = await fetch(url);
+                // Retry on rate limits (503) or throttling (429)
+                if (response.status === 503 || response.status === 429) {
+                    throw new Error(`Server temporarily unavailable (${response.status})`);
+                }
+                return response;
+            } catch (err) {
+                // Catch network errors (e.g., connection reset) and the manual 503/429 errors thrown above
+                if (i === retries) throw err;
+                console.warn(`[ElephantTags] Fetch failed (${url}), retrying in ${backoff}ms... (Attempt ${i + 1}/${retries})`, err);
+                await new Promise(r => setTimeout(r, backoff));
+                backoff *= 2;
+            }
+        }
+    }
+
+    /**
      * Fetches releases for a release group using JSON API.
      * @param {string} rgId
      * @returns {Promise<Array<{id: string, title: string}>>}
@@ -290,7 +319,7 @@
     async function fetchReleases(rgId) {
         const url = `${location.origin}/ws/2/release-group/${rgId}?inc=releases&fmt=json`;
         try {
-            const response = await fetch(url);
+            const response = await fetchWithRetry(url);
             if (!response.ok) throw new Error(response.statusText);
             const data = await response.json();
             return data.releases.map(r => ({ id: r.id, title: r.title }));
@@ -308,23 +337,29 @@
     async function fetchRecordings(releaseId) {
         const url = `${location.origin}/ws/2/release/${releaseId}?inc=recordings&fmt=json`;
         try {
-            const response = await fetch(url);
+            const response = await fetchWithRetry(url);
             if (!response.ok) throw new Error(response.statusText);
             const data = await response.json();
 
             const recordings = [];
-            data.media.forEach(medium => {
-                medium.tracks.forEach(track => {
-                    if (track.recording) {
-                        recordings.push({
-                            id: track.recording.id,
-                            title: track.recording.title
+            if (data.media && Array.isArray(data.media)) {
+                data.media.forEach(medium => {
+                    if (medium.tracks && Array.isArray(medium.tracks)) {
+                        medium.tracks.forEach(track => {
+                            if (track.recording) {
+                                recordings.push({
+                                    id: track.recording.id,
+                                    title: track.recording.title
+                                });
+                            }
                         });
                     }
                 });
-            });
+            }
             return recordings;
         } catch (err) {
+            console.error(`[ElephantTags] Failed to fetch recordings for Release ${releaseId}:`, err);
+            return [];
         }
     }
 
@@ -376,6 +411,7 @@
             // 2. Cascade to Releases (if toggled or needed for recordings)
             if (isToggledReleasesParam || isToggledRecordingsParam) {
                 const releases = await fetchReleases(releaseGroupId);
+                await delay(1000); // Rate limit compliance
 
                 for (const release of releases) {
                     // Add Release (if toggled)
@@ -386,6 +422,7 @@
                     // 3. Cascade to Recordings (if toggled)
                     if (isToggledRecordingsParam) {
                         const recordings = await fetchRecordings(release.id);
+                        await delay(1000); // Rate limit compliance
                         recordings.forEach(rec => {
                             if (!uniqueRecordingIds.has(rec.id)) {
                                 uniqueRecordingIds.add(rec.id);
@@ -468,6 +505,7 @@
             // 2. Cascade to Recordings (if toggled)
             if (isToggledRecordingsParam) {
                 const recordings = await fetchRecordings(releaseId);
+                await delay(1000); // Rate limit compliance
                 recordings.forEach(rec => {
                     if (!uniqueRecordingIds.has(rec.id)) {
                         uniqueRecordingIds.add(rec.id);
@@ -603,6 +641,7 @@
             // 2. Cascade to Recordings (if toggled)
             if (isToggledRecordingsParam) {
                 const recordings = await fetchRecordings(releaseId);
+                await delay(1000); // Rate limit compliance
                 recordings.forEach(rec => {
                     if (!uniqueRecordingIds.has(rec.id)) {
                         uniqueRecordingIds.add(rec.id);
