@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings).
-// @version      1.7-beta
+// @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities (artist > release group > release > recordings).
+// @version      1.8-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -92,7 +92,7 @@
             margin-left: 4px;
             cursor: pointer;
         }
-        .nuclear-clear-wrapper {
+        .nuclear-withdraw-wrapper {
             border-top: 1px dashed #ddd;
             margin-top: 4px;
             padding-top: 4px;
@@ -177,13 +177,13 @@
     const releaseRecordingCache = new Map();
 
     /**
-     * Disables and restyles the 'Clear instead of tag' toggle after an action is executed.
+     * Disables and restyles the 'Withdraw votes' toggle after an action is executed.
      */
-    function markClearToggleAsStale(isBulkAction = false) {
-        const clearLabel = document.querySelector('label[for="mb-clear-action"]');
-        const clearCheckbox = document.getElementById('mb-clear-action');
+    function markWithdrawToggleAsStale(isBulkAction = false) {
+        const withdrawLabel = document.querySelector('label[for="mb-withdraw-action"]');
+        const withdrawCheckbox = document.getElementById('mb-withdraw-action');
 
-        if (clearLabel && clearCheckbox) {
+        if (withdrawLabel && withdrawCheckbox) {
             console.log('%c[ElephantTags] Mark toggle as stale: Updating visuals (skipped text change per user request).', 'color: #777;');
             // We DO NOT change the text anymore, so users don't get confused.
             // We DO NOT disable the checkbox anymore, allowing users to switch it and submit again (Undo).
@@ -280,7 +280,7 @@
     }
 
     // ----------------------------------------------------------------------
-    // Bulk Tagging/Clearing Functions
+    // Bulk Tagging/Withdrawing Functions
     // ----------------------------------------------------------------------
 
     // ----------------------------------------------------------------------
@@ -527,7 +527,7 @@
         cascade           // { root: boolean, releases: boolean, recordings: boolean }
     }) {
         const action = (actionType === 'tag') ? 'upvote' : 'withdraw';
-        const isClear = actionType === 'withdraw' || action === 'withdraw';
+        const isWithdraw = actionType === 'withdraw' || action === 'withdraw';
         const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
         if (!tags.length) return;
 
@@ -626,7 +626,7 @@
                 const row = cb.closest('tr');
                 // Use generic link finder again for status icons
                 const link = row.querySelector(`a[href*="/${rootEntityType}/"]`);
-                if (link) showTagStatus(link, tags.join(', '), true, false, isClear);
+                if (link) showTagStatus(link, tags.join(', '), true, false, isWithdraw);
             });
 
             const counts = {};
@@ -700,7 +700,7 @@
 
 
     // --- UI Helper for Individual Status ---
-    function showTagStatus(element, text, success, isError, isClear) {
+    function showTagStatus(element, text, success, isError, isWithdraw) {
         if (!element) return;
         const existing = element.parentNode.querySelector('.rec-tag-status');
         if (existing) existing.remove();
@@ -711,7 +711,7 @@
         if (isError) {
             span.style.color = 'red';
             span.textContent = '❌ ' + text;
-        } else if (isClear) {
+        } else if (isWithdraw) {
             span.style.color = '#777';
             span.textContent = '🗑 ' + text;
         } else if (success) {
@@ -926,13 +926,13 @@
                 toggleContainer.appendChild(recordingToggle.span);
             }
 
-            // --- Clear Action Toggle (The single switch) ---
-            const clearToggleWrapper = document.createElement('div');
-            clearToggleWrapper.className = 'nuclear-clear-wrapper';
-            const clearToggle = createCheckboxToggle('mb-clear-action', 'Clear instead of tag', '0px');
-            clearToggle.label.style.color = '#777';
-            clearToggleWrapper.appendChild(clearToggle.span);
-            toggleContainer.appendChild(clearToggleWrapper);
+            // --- Withdraw Action Toggle (The single switch) ---
+            const withdrawToggleWrapper = document.createElement('div');
+            withdrawToggleWrapper.className = 'nuclear-withdraw-wrapper';
+            const withdrawToggle = createCheckboxToggle('mb-withdraw-action', 'Withdraw votes', '0px');
+            withdrawToggle.label.style.color = '#777';
+            withdrawToggleWrapper.appendChild(withdrawToggle.span);
+            toggleContainer.appendChild(withdrawToggleWrapper);
 
 
             // --- Toggle Event Listeners (Daisy Chain Logic) ---
@@ -1002,7 +1002,7 @@
 
             // Attach listener to all cascaded checkboxes
             document.querySelectorAll('.toggle-rg-checkbox').forEach(cb => {
-                if (cb.id !== 'mb-clear-action') {
+                if (cb.id !== 'mb-withdraw-action') {
                     cb.addEventListener('change', updateCheckboxState);
                 }
             });
@@ -1018,7 +1018,7 @@
 
             unifiedWrapper.appendChild(bulkWrapper);
 
-            // --- Submit Button Handler with FIX for Single Clear ---
+            // --- Submit Button Handler with FIX for Single Withdraw ---
             submitButton.addEventListener('click', async function (e) {
                 if (isBulkRunning) {
                     e.preventDefault();
@@ -1034,8 +1034,8 @@
 
                 if (!tagText) return;
 
-                const clearActionCheckbox = document.getElementById('mb-clear-action');
-                const actionType = clearActionCheckbox.checked ? 'clear' : 'tag';
+                const withdrawActionCheckbox = document.getElementById('mb-withdraw-action');
+                const actionType = withdrawActionCheckbox.checked ? 'withdraw' : 'tag';
 
                 const isMasterToggled = masterToggle.checkbox.checked;
                 const hasManualSelection = (
@@ -1093,8 +1093,8 @@
                 if (actionType === 'tag') {
                     // If it's just a single tag, we do nothing and allow native flow to complete instantly.
                     if (!isBulkAction) {
-                        // Action finished by native click. Disable clear toggle immediately.
-                        markClearToggleAsStale(false);
+                        // Action finished by native click. Disable withdraw toggle immediately.
+                        markWithdrawToggleAsStale(false);
                         return;
                     }
 
@@ -1126,7 +1126,7 @@
                             // --- UI CLEANUP ---
                             updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
                             setTimeout(() => { updateProgress(''); }, 3000);
-                            markClearToggleAsStale(true); // Disable after bulk
+                            markWithdrawToggleAsStale(true); // Disable after bulk
                         } finally {
                             isBulkRunning = false;
                             submitButton.disabled = false;
@@ -1136,35 +1136,35 @@
                 }
 
 
-                // 2. SCENARIO: CLEAR (Custom Downvote Flow) - INTERRUPT native UPVOTE
+                // 2. SCENARIO: WITHDRAW (Custom Downvote Flow) - INTERRUPT native UPVOTE
                 e.preventDefault();
 
                 // Clear the input field immediately
                 currentInput.value = '';
                 currentInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-                // --- Execute Clear Action ---
+                // --- Execute Withdraw Action ---
                 if (apiEntityType && entityId) {
 
                     if (isBulkAction) {
-                        // --- BULK CLEAR: Custom AJAX for Current Entity + Cascade ---
-                        console.log(`[ElephantTags] BULK CLEAR: Intercepting native upvote and performing manual downvote for current entity and starting cascade.`);
-                        updateProgress(`Clearing tag from current entity: ${tagText}...`);
+                        // --- BULK WITHDRAW: Custom AJAX for Current Entity + Cascade ---
+                        console.log(`[ElephantTags] BULK WITHDRAW: Intercepting native upvote and performing manual downvote for current entity and starting cascade.`);
+                        updateProgress(`Withdrawing tag from current entity: ${tagText}...`);
 
-                        // Use custom AJAX clear for current entity in the bulk path
+                        // Use custom AJAX withdraw for current entity in the bulk path
                         // NEW: Use submitTagsBatch logic
                         const tags = tagText.split(',').map(t => t.trim()).filter(t => t);
                         await submitTagsBatch([{ id: entityId, type: apiEntityType }], tags, 'withdraw');
 
                         // Immediately mark as stale and update label
-                        markClearToggleAsStale(true);
+                        markWithdrawToggleAsStale(true);
 
                         updateProgress(`Current entity action complete. Starting bulk cascade...`);
 
-                        // Bulk Clear: start the cascade immediately.
+                        // Bulk Withdraw: start the cascade immediately.
                         setTimeout(async () => {
                             try {
-                                // --- RUN CHILD BULK ACTION (Clear) ---
+                                // --- RUN CHILD BULK ACTION (Withdraw) ---
                                 if (pageContext === 'artist') {
                                     await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
                                 } else if (pageContext === 'release_group') {
@@ -1188,13 +1188,13 @@
                         }, 100); // 100ms small delay to ensure native click is fully cancelled.
 
                     } else {
-                        // --- SINGLE CLEAR: Using Text Match ---
-                        console.log(`[ElephantTags] SINGLE CLEAR: Intercepting native upvote and performing native downvote click for instant UI update.`);
-                        updateProgress(`Clearing tag from current entity: ${tagText}...`);
+                        // --- SINGLE WITHDRAW: Using Text Match ---
+                        console.log(`[ElephantTags] SINGLE WITHDRAW: Intercepting native upvote and performing native downvote click for instant UI update.`);
+                        updateProgress(`Withdrawing tag from current entity: ${tagText}...`);
 
-                        const tagsToClear = tagText.split(',').map(t => t.trim()).filter(t => t);
+                        const tagsToWithdraw = tagText.split(',').map(t => t.trim()).filter(t => t);
 
-                        tagsToClear.forEach(t => {
+                        tagsToWithdraw.forEach(t => {
                             let tagLink = null;
 
                             const sidebarLinks = document.querySelectorAll('#sidebar a');
@@ -1210,17 +1210,17 @@
 
                                 if (downvoteButton && !downvoteButton.disabled) {
                                     downvoteButton.click();
-                                    console.log(`[ElephantTags] SINGLE CLEAR: Clicked native downvote for "${t}". SUCCESS.`);
+                                    console.log(`[ElephantTags] SINGLE WITHDRAW: Clicked native downvote for "${t}". SUCCESS.`);
                                 } else {
-                                    console.log(`[ElephantTags] SINGLE CLEAR: Tag "${t}" found but downvote button not present/enabled.`);
+                                    console.log(`[ElephantTags] SINGLE WITHDRAW: Tag "${t}" found but downvote button not present/enabled.`);
                                 }
                             } else {
-                                console.log(`[ElephantTags] SINGLE CLEAR: Tag "${t}" not found in sidebar list.`);
+                                console.log(`[ElephantTags] SINGLE WITHDRAW: Tag "${t}" not found in sidebar list.`);
                             }
                         });
 
                         // Action complete, disable the toggle and clear the progress message
-                        markClearToggleAsStale(false);
+                        markWithdrawToggleAsStale(false);
                         setTimeout(() => { updateProgress(''); }, 500); // Clear progress message quickly
                     }
                 }
