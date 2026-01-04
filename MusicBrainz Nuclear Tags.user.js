@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and clear tags to selected sub-entities (artist > release group > release > recordings).
-// @version      1.6-beta
+// @version      1.7-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -122,6 +122,7 @@
     let isToggledReleases = false;
     let isToggledRecordings = false;
     let progressDisplay = null;
+    let isBulkRunning = false;
 
     // --- Re-initialization Function (Non-destructive rebinding) ---
 
@@ -1019,6 +1020,12 @@
 
             // --- Submit Button Handler with FIX for Single Clear ---
             submitButton.addEventListener('click', async function (e) {
+                if (isBulkRunning) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    console.warn('[ElephantTags] Bulk operation is currently running. Please wait.');
+                    return;
+                }
 
                 // CRUCIAL: Re-fetch form and input inside the closure for the currently active elements
                 const currentForm = document.getElementById('tag-form');
@@ -1040,6 +1047,11 @@
                     );
 
                 const isBulkAction = isMasterToggled || hasManualSelection;
+
+                if (isBulkAction) {
+                    isBulkRunning = true;
+                    submitButton.disabled = true;
+                }
 
                 // Always save the tag/render buttons before any action
                 saveAndRenderOnSubmission(currentForm, tagText, currentInput, submitButton);
@@ -1091,29 +1103,34 @@
                     console.log(`[ElephantTags] Bulk TAG: Allowing native upvote. Starting cascade immediately.`);
 
                     setTimeout(async () => {
-                        updateProgress(`Current entity action (native tag) complete. Starting bulk cascade...`);
+                        try {
+                            updateProgress(`Current entity action (native tag) complete. Starting bulk cascade...`);
 
-                        // --- RUN CHILD BULK ACTION ---
-                        if (pageContext === 'artist') {
-                            // PASS: RG Toggle, Releases Toggle, Recordings Toggle
-                            await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
-                        } else if (pageContext === 'release_group') {
-                            // PASS: Releases Toggle (isToggledReleasesNow is now correct), Recordings Toggle
-                            await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
-                        } else if (pageContext === 'artist_releases' || pageContext === 'label') {
-                            // PASS: Releases Toggle (Master), Recordings Toggle
-                            await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
-                        } else if (pageContext === 'artist_recordings') {
-                            await tagCheckedArtistRecordings(tagText, actionType);
-                        } else if (pageContext === 'release') {
-                            // This only runs the recording bulk action (the release itself is tagged by native flow)
-                            await tagCheckedRecordings(tagText, actionType);
+                            // --- RUN CHILD BULK ACTION ---
+                            if (pageContext === 'artist') {
+                                // PASS: RG Toggle, Releases Toggle, Recordings Toggle
+                                await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
+                            } else if (pageContext === 'release_group') {
+                                // PASS: Releases Toggle (isToggledReleasesNow is now correct), Recordings Toggle
+                                await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                            } else if (pageContext === 'artist_releases' || pageContext === 'label') {
+                                // PASS: Releases Toggle (Master), Recordings Toggle
+                                await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                            } else if (pageContext === 'artist_recordings') {
+                                await tagCheckedArtistRecordings(tagText, actionType);
+                            } else if (pageContext === 'release') {
+                                // This only runs the recording bulk action (the release itself is tagged by native flow)
+                                await tagCheckedRecordings(tagText, actionType);
+                            }
+
+                            // --- UI CLEANUP ---
+                            updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
+                            setTimeout(() => { updateProgress(''); }, 3000);
+                            markClearToggleAsStale(true); // Disable after bulk
+                        } finally {
+                            isBulkRunning = false;
+                            submitButton.disabled = false;
                         }
-
-                        // --- UI CLEANUP ---
-                        updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
-                        setTimeout(() => { updateProgress(''); }, 3000);
-                        markClearToggleAsStale(true); // Disable after bulk
                     }, 100); // 100ms small delay to ensure native click fires first
                     return;
                 }
@@ -1146,22 +1163,27 @@
 
                         // Bulk Clear: start the cascade immediately.
                         setTimeout(async () => {
-                            // --- RUN CHILD BULK ACTION (Clear) ---
-                            if (pageContext === 'artist') {
-                                await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
-                            } else if (pageContext === 'release_group') {
-                                await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
-                            } else if (pageContext === 'artist_releases' || pageContext === 'label') {
-                                await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
-                            } else if (pageContext === 'artist_recordings') {
-                                await tagCheckedArtistRecordings(tagText, actionType);
-                            } else if (pageContext === 'release') {
-                                await tagCheckedRecordings(tagText, actionType);
-                            }
+                            try {
+                                // --- RUN CHILD BULK ACTION (Clear) ---
+                                if (pageContext === 'artist') {
+                                    await tagCheckedReleaseGroups(tagText, actionType, isToggledRGsNow, isToggledReleasesNow, isToggledRecordingsNow);
+                                } else if (pageContext === 'release_group') {
+                                    await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                                } else if (pageContext === 'artist_releases' || pageContext === 'label') {
+                                    await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                                } else if (pageContext === 'artist_recordings') {
+                                    await tagCheckedArtistRecordings(tagText, actionType);
+                                } else if (pageContext === 'release') {
+                                    await tagCheckedRecordings(tagText, actionType);
+                                }
 
-                            // --- UI CLEANUP ---
-                            updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
-                            setTimeout(() => { updateProgress(''); }, 3000);
+                                // --- UI CLEANUP ---
+                                updateProgress(`Bulk Action Complete. Refresh required to view changes.`);
+                                setTimeout(() => { updateProgress(''); }, 3000);
+                            } finally {
+                                isBulkRunning = false;
+                                submitButton.disabled = false;
+                            }
 
                         }, 100); // 100ms small delay to ensure native click is fully cancelled.
 
