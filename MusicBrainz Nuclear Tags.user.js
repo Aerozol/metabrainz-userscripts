@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities (artist > release group > release > recordings).
-// @version      1.8-beta
+// @version      1.9-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -175,6 +175,7 @@
 
     const rgReleaseCache = new Map();
     const releaseRecordingCache = new Map();
+    const releaseRgMap = new Map();
 
     /**
      * Disables and restyles the 'Withdraw votes' toggle after an action is executed.
@@ -511,6 +512,95 @@
         }
     }
 
+    /**
+     * Unified fetcher for Release data (RG and/or Recordings).
+     * @param {string} releaseId
+     * @param {string[]} incParams Array of include parameters e.g. ['release-groups', 'recordings']
+     * @returns {Promise<{releaseGroup: {id: string, title: string}|null, recordings: Array<{id: string, title: string}>, isCached: boolean}>}
+     */
+    async function fetchReleaseData(releaseId, incParams = []) {
+        // Check individual caches to determine if we need to fetch
+        // but since we are doing bulk ops, we mainly care about not hitting the same thing twice in one run.
+        // For now, we will rely on individual caches for components or just fetch.
+        // Actually, let's just do fresh fetch for simplified bulk logic or check individual caches?
+        // Let's implement smart caching: check if we have what we need.
+
+        const needsRG = incParams.includes('release-groups');
+        const needsRecs = incParams.includes('recordings');
+
+        let cachedRG = releaseRgMap.get(releaseId);
+        let cachedRecs = releaseRecordingCache.get(releaseId);
+
+        if ((!needsRG || cachedRG) && (!needsRecs || cachedRecs)) {
+            console.log(`[ElephantTags] Helper: Returning fully cached data for Release ${releaseId}`);
+            return {
+                releaseGroup: needsRG ? cachedRG : null,
+                recordings: needsRecs ? cachedRecs : [],
+                isCached: true
+            };
+        }
+
+        const incStr = incParams.join('+');
+        const url = `${location.origin}/ws/2/release/${releaseId}?inc=${incStr}&fmt=json`;
+        console.log(`[ElephantTags] Fetching Release Data: ${url}`);
+
+        try {
+            const response = await fetchWithRetry(url);
+            if (!response.ok) throw new Error(response.statusText);
+            const data = await response.json();
+
+            let resultRG = null;
+            let resultRecs = [];
+
+            if (needsRG) {
+                const rg = data['release-group'];
+                if (rg) {
+                    resultRG = { id: rg.id, title: rg.title };
+                    releaseRgMap.set(releaseId, resultRG);
+                }
+            }
+
+            if (needsRecs) {
+                if (data.media && Array.isArray(data.media)) {
+                    data.media.forEach(medium => {
+                        if (medium.tracks && Array.isArray(medium.tracks)) {
+                            medium.tracks.forEach(track => {
+                                if (track.recording) {
+                                    resultRecs.push({
+                                        id: track.recording.id,
+                                        title: track.recording.title
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                releaseRecordingCache.set(releaseId, resultRecs);
+            }
+
+            return {
+                releaseGroup: resultRG,
+                recordings: resultRecs,
+                isCached: false
+            };
+
+        } catch (err) {
+            console.error(`[ElephantTags] Failed to fetch data for Release ${releaseId}:`, err);
+            return { releaseGroup: null, recordings: [], isCached: false };
+        }
+    }
+
+    /**
+     * Fetches release group for a release using JSON API.
+     * @param {string} releaseId
+     * @returns {Promise<{item: {id: string, title: string}|null, isCached: boolean}>}
+     */
+    async function fetchReleaseGroup(releaseId) {
+        // Legacy wrapper for single usage if needed, or redirect to unified
+        const { releaseGroup, isCached } = await fetchReleaseData(releaseId, ['release-groups']);
+        return { item: releaseGroup, isCached };
+    }
+
     // ----------------------------------------------------------------------
     // Unified Bulk Orchestrator
     // ----------------------------------------------------------------------
@@ -543,6 +633,7 @@
 
         let accumulatedEntities = [];
         const uniqueRecordingIds = new Set();
+        const uniqueReleaseGroupIds = new Set();
         const total = visibleChecked.length;
 
         // 2. Process Roots & Cascade
@@ -598,15 +689,32 @@
             }
             // Cascade: Release -> Recording
             // (Relevant if root is release)
-            else if (rootEntityType === 'release' && cascade.recordings) {
-                const { items: recordings, isCached: recsCached } = await fetchRecordings(rootId);
-                if (!recsCached) await delay(1000); // Rate limit
-                recordings.forEach(rec => {
-                    if (!uniqueRecordingIds.has(rec.id)) {
-                        uniqueRecordingIds.add(rec.id);
-                        accumulatedEntities.push({ id: rec.id, type: 'recording', title: rec.title });
+            else if (rootEntityType === 'release') {
+
+                const incParams = [];
+                if (cascade.releaseGroups) incParams.push('release-groups');
+                if (cascade.recordings) incParams.push('recordings');
+
+                if (incParams.length > 0) {
+                    const { releaseGroup: rg, recordings, isCached } = await fetchReleaseData(rootId, incParams);
+                    if (!isCached) await delay(1000); // Rate limit
+
+                    // 1. Cascade to Release Group
+                    if (cascade.releaseGroups && rg && !uniqueReleaseGroupIds.has(rg.id)) {
+                        uniqueReleaseGroupIds.add(rg.id);
+                        accumulatedEntities.push({ id: rg.id, type: 'release-group', title: rg.title });
                     }
-                });
+
+                    // 2. Cascade to Recordings
+                    if (cascade.recordings && recordings.length > 0) {
+                        recordings.forEach(rec => {
+                            if (!uniqueRecordingIds.has(rec.id)) {
+                                uniqueRecordingIds.add(rec.id);
+                                accumulatedEntities.push({ id: rec.id, type: 'recording', title: rec.title });
+                            }
+                        });
+                    }
+                }
             }
         }
 
@@ -673,14 +781,14 @@
     }
 
     // For Artist/Label pages where releases are listed directly
-    async function tagCheckedReleasesDirect(tagInput, actionType, isToggledReleases, isToggledRecordings) {
+    async function tagCheckedReleasesDirect(tagInput, actionType, isToggledReleases, isToggledRecordings, isToggledRGs) {
         await orchestrateBulkTagging({
             label: 'Release',
             tagInput, actionType,
             // Broad selector for any table using merge checkboxes
             checkboxSelector: `table.tbl input[name="add-to-merge"]:checked`,
             rootEntityType: 'release',
-            cascade: { root: isToggledReleases, releases: false, recordings: isToggledRecordings }
+            cascade: { root: isToggledReleases, releases: false, recordings: isToggledRecordings, releaseGroups: isToggledRGs }
         });
     }
 
@@ -913,6 +1021,16 @@
                 toggleContainer.appendChild(releaseToggle.span);
             }
 
+            // NEW: Add Release Group toggle for Label, Artist Releases, and Release pages
+            let rgToggle = null;
+            if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'release') {
+                rgToggle = createCheckboxToggle('mb-rg-toggle', (pageContext === 'release') ? 'Release Group' : '↳ release groups', (pageContext === 'release') ? '0px' : '20px');
+                // We reuse isToggledRGs for state persistence, though it might be shared with Artist page RG master toggle.
+                // In this context, it's a child toggle.
+                rgToggle.checkbox.checked = isToggledRGs;
+                toggleContainer.appendChild(rgToggle.span);
+            }
+
             if (pageContext === 'artist_releases' || pageContext === 'label') {
                 // For Artist Releases page AND Label page: Master is Releases. Child is Recordings.
                 recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', '20px');
@@ -953,6 +1071,10 @@
                 }
                 if (recordingToggle) {
                     isToggledRecordings = recordingToggle.checkbox.checked;
+                }
+                if (rgToggle) {
+                    // Only update global RG state if we have a specific toggle for it here
+                    isToggledRGs = rgToggle.checkbox.checked;
                 }
 
                 // 2. Apply Daisy Chain Logic (Updates UI from bottom up) (DISABLED TO ALLOW FOR SELECTING SEPARATE 'LEVELS')
@@ -1066,6 +1188,7 @@
                 // --- READ CASCADE TOGGLE STATE DIRECTLY FROM DOM FOR RELIABILITY ---
                 const domMaster = document.getElementById('mb-master-toggle');
                 const domRelease = document.getElementById('mb-releases-toggle');
+                const domRg = document.getElementById('mb-rg-toggle');
                 const domRec = document.getElementById('mb-recordings-toggle');
 
                 const masterChecked = domMaster ? domMaster.checked : false;
@@ -1083,8 +1206,12 @@
                     isToggledRecordingsNow = domRec ? domRec.checked : false;
                 } else if (pageContext === 'artist_releases' || pageContext === 'label') {
                     isToggledReleasesNow = masterChecked;
+                    isToggledRGsNow = domRg ? domRg.checked : false; // New RG toggle
                     isToggledRecordingsNow = domRec ? domRec.checked : false;
-                } else if (pageContext === 'release' || pageContext === 'artist_recordings') {
+                } else if (pageContext === 'release') {
+                    isToggledRGsNow = domRg ? domRg.checked : false; // New RG toggle
+                    isToggledRecordingsNow = masterChecked;
+                } else if (pageContext === 'artist_recordings') {
                     isToggledRecordingsNow = masterChecked;
                 }
 
@@ -1114,12 +1241,27 @@
                                 // PASS: Releases Toggle (isToggledReleasesNow is now correct), Recordings Toggle
                                 await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
                             } else if (pageContext === 'artist_releases' || pageContext === 'label') {
-                                // PASS: Releases Toggle (Master), Recordings Toggle
-                                await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                                // PASS: Releases Toggle (Master), Recordings Toggle, RG Toggle (New)
+                                await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow, isToggledRGsNow);
                             } else if (pageContext === 'artist_recordings') {
                                 await tagCheckedArtistRecordings(tagText, actionType);
                             } else if (pageContext === 'release') {
-                                // This only runs the recording bulk action (the release itself is tagged by native flow)
+
+                                const incParams = [];
+                                if (isToggledRGsNow && entityId) incParams.push('release-groups');
+                                // Note: For the *current* release page, we might just be tagging recordings via checkboxes,
+                                // but usually native flow handles the release.
+
+                                // However, we still use fetchReleaseData for RG if needed.
+                                if (incParams.length > 0) {
+                                    updateProgress('Processing Release Group...');
+                                    const { releaseGroup: rgData } = await fetchReleaseData(entityId, incParams);
+                                    if (rgData) {
+                                        await submitTagsBatch([{ id: rgData.id, type: 'release-group' }], [tagText], actionType === 'tag' ? 'upvote' : 'withdraw');
+                                    }
+                                }
+
+                                // 2. Tag Recordings if toggled
                                 await tagCheckedRecordings(tagText, actionType);
                             }
 
@@ -1170,10 +1312,17 @@
                                 } else if (pageContext === 'release_group') {
                                     await tagCheckedReleases(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
                                 } else if (pageContext === 'artist_releases' || pageContext === 'label') {
-                                    await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow);
+                                    await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow, isToggledRGsNow);
                                 } else if (pageContext === 'artist_recordings') {
                                     await tagCheckedArtistRecordings(tagText, actionType);
                                 } else if (pageContext === 'release') {
+                                    if (isToggledRGsNow && entityId) {
+                                        updateProgress('Processing Release Group...');
+                                        const { item: rgData } = await fetchReleaseGroup(entityId);
+                                        if (rgData) {
+                                            await submitTagsBatch([{ id: rgData.id, type: 'release-group' }], [tagText], actionType === 'tag' ? 'upvote' : 'withdraw');
+                                        }
+                                    }
                                     await tagCheckedRecordings(tagText, actionType);
                                 }
 
