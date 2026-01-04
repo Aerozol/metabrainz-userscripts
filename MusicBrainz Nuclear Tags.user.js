@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities (artist > release group > release > recordings).
-// @version      1.9-beta
+// @version      1.10-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -1022,20 +1022,21 @@
             }
 
             // NEW: Add Release Group toggle for Label, Artist Releases, and Release pages
-            let rgToggle = null;
-            if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'release') {
-                rgToggle = createCheckboxToggle('mb-rg-toggle', (pageContext === 'release') ? 'Release Group' : '↳ release groups', (pageContext === 'release') ? '0px' : '20px');
-                // We reuse isToggledRGs for state persistence, though it might be shared with Artist page RG master toggle.
-                // In this context, it's a child toggle.
-                rgToggle.checkbox.checked = isToggledRGs;
-                toggleContainer.appendChild(rgToggle.span);
-            }
-
             if (pageContext === 'artist_releases' || pageContext === 'label') {
                 // For Artist Releases page AND Label page: Master is Releases. Child is Recordings.
                 recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', '20px');
                 recordingToggle.checkbox.checked = isToggledRecordings;
                 toggleContainer.appendChild(recordingToggle.span);
+            }
+
+            // NEW: Add Release Group toggle for Label, Artist Releases, and Release pages
+            let rgToggle = null;
+            if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'release') {
+                rgToggle = createCheckboxToggle('mb-rg-toggle', 'Release Group', '0px');
+                // We reuse isToggledRGs for state persistence, though it might be shared with Artist page RG master toggle.
+                // In this context, it's a child toggle.
+                rgToggle.checkbox.checked = isToggledRGs;
+                toggleContainer.appendChild(rgToggle.span);
             }
 
             if (pageContext !== 'release' && pageContext !== 'artist_releases' && pageContext !== 'artist_recordings' && pageContext !== 'label') {
