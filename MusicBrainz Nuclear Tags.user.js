@@ -1258,7 +1258,8 @@
                                     updateProgress('Processing Release Group...');
                                     const { releaseGroup: rgData } = await fetchReleaseData(entityId, incParams);
                                     if (rgData) {
-                                        await submitTagsBatch([{ id: rgData.id, type: 'release-group' }], [tagText], actionType === 'tag' ? 'upvote' : 'withdraw');
+                                        const tags = tagText.split(',').map(t => t.trim()).filter(t => t);
+                                        await submitTagsBatch([{ id: rgData.id, type: 'release-group' }], tags, actionType === 'tag' ? 'upvote' : 'withdraw');
                                     }
                                 }
 
@@ -1321,7 +1322,8 @@
                                         updateProgress('Processing Release Group...');
                                         const { item: rgData } = await fetchReleaseGroup(entityId);
                                         if (rgData) {
-                                            await submitTagsBatch([{ id: rgData.id, type: 'release-group' }], [tagText], actionType === 'tag' ? 'upvote' : 'withdraw');
+                                            const tags = tagText.split(',').map(t => t.trim()).filter(t => t);
+                                            await submitTagsBatch([{ id: rgData.id, type: 'release-group' }], tags, actionType === 'tag' ? 'upvote' : 'withdraw');
                                         }
                                     }
                                     await tagCheckedRecordings(tagText, actionType);
