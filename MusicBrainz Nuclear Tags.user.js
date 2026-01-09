@@ -1160,16 +1160,26 @@
                 const withdrawActionCheckbox = document.getElementById('mb-withdraw-action');
                 const actionType = withdrawActionCheckbox.checked ? 'withdraw' : 'tag';
 
-                const isMasterToggled = masterToggle.checkbox.checked;
+                // --- READ TOGGLE STATE DIRECTLY FROM DOM FOR RELIABILITY ---
+                const domMaster = document.getElementById('mb-master-toggle');
+                const domRg = document.getElementById('mb-rg-toggle');
+                const domRelease = document.getElementById('mb-releases-toggle');
+                const domRec = document.getElementById('mb-recordings-toggle');
+
+                const isAnyToggleChecked = (domMaster && domMaster.checked) ||
+                    (domRg && domRg.checked) ||
+                    (domRelease && domRelease.checked) ||
+                    (domRec && domRec.checked);
+
                 const hasManualSelection = (
-                    pageContext === 'artist' && document.querySelectorAll('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR + ':checked').length > 0
+                    pageContext === 'artist' && Array.from(document.querySelectorAll('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
                 ) || (
-                        (pageContext === 'release-group' || pageContext === 'artist_releases' || pageContext === 'label') && document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked').length > 0
+                        (pageContext === 'release-group' || pageContext === 'artist_releases' || pageContext === 'label') && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked')).filter(cb => cb.offsetParent !== null).length > 0
                     ) || (
-                        (pageContext === 'release' || pageContext === 'artist_recordings') && document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked, table.tbl ' + RECORDING_CHECKBOX_SELECTOR + ':checked').length > 0
+                        (pageContext === 'release' || pageContext === 'artist_recordings') && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked, table.tbl ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
                     );
 
-                const isBulkAction = isMasterToggled || hasManualSelection;
+                const isBulkAction = isAnyToggleChecked || hasManualSelection;
 
                 if (isBulkAction) {
                     isBulkRunning = true;
@@ -1186,11 +1196,7 @@
                     ? rawType
                     : 'release'; // Fallback (though risky if wrong)
 
-                // --- READ CASCADE TOGGLE STATE DIRECTLY FROM DOM FOR RELIABILITY ---
-                const domMaster = document.getElementById('mb-master-toggle');
-                const domRelease = document.getElementById('mb-releases-toggle');
-                const domRg = document.getElementById('mb-rg-toggle');
-                const domRec = document.getElementById('mb-recordings-toggle');
+
 
                 const masterChecked = domMaster ? domMaster.checked : false;
 
