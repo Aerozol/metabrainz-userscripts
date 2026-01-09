@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities (artist > release group > release > recordings).
-// @version      1.11-beta
+// @version      1.12-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -300,7 +300,8 @@
 
         const clientVersion = 'MusicBrainzNuclearTags-1.5';
         const url = `${location.origin}/ws/2/tag?client=${clientVersion}`;
-        const CHUNK_SIZE = 200;
+        const savedChunkSize = localStorage.getItem('nuclear_tags_chunk_size');
+        const CHUNK_SIZE = savedChunkSize ? parseInt(savedChunkSize, 10) : 200;
 
         // Chunk the entities
         const chunks = [];
@@ -311,8 +312,13 @@
         console.log(`[ElephantTags] Batch Submission: Processing ${entityList.length} entities in ${chunks.length} chunks.`);
         let allSuccess = true;
 
+        const isBenchmark = localStorage.getItem('nuclear_tags_benchmark') === 'true';
+        const metrics = [];
+        const totalStart = performance.now();
+
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
+            const chunkStart = performance.now();
 
             if (i > 0) {
                 updateProgress(`Batch processing: Chunk ${i + 1}/${chunks.length} (waiting)...`);
@@ -411,10 +417,36 @@
                 }
             }
 
+            const chunkEnd = performance.now();
+            if (isBenchmark) {
+                metrics.push({
+                    chunk: i + 1,
+                    size: chunk.length,
+                    durationMs: parseFloat((chunkEnd - chunkStart).toFixed(2)),
+                    status: chunkSuccess ? 'OK' : 'FAIL'
+                });
+            }
+
             if (!chunkSuccess) {
                 allSuccess = false;
                 // keep going to try other chunks? Yes.
             }
+        }
+
+        if (isBenchmark && metrics.length > 0) {
+            const totalEnd = performance.now();
+            const totalDuration = (totalEnd - totalStart) / 1000; // seconds
+            const avgChunkTime = metrics.reduce((a, b) => a + b.durationMs, 0) / metrics.length;
+            const totalEntities = metrics.reduce((a, b) => a + b.size, 0);
+
+            console.group('📊 ElephantTags Benchmark Report');
+            console.log(`Chunk Size = ${CHUNK_SIZE}`);
+            console.log(`Total Entities: ${totalEntities}`);
+            console.log(`Total Duration: ${totalDuration.toFixed(2)}s`);
+            console.log(`Throughput: ${(totalEntities / totalDuration).toFixed(2)} entities/sec`);
+            console.log(`Avg Chunk Latency: ${avgChunkTime.toFixed(2)}ms`);
+            console.table(metrics);
+            console.groupEnd();
         }
 
         return allSuccess;
@@ -1052,6 +1084,58 @@
             withdrawToggle.label.style.color = '#777';
             withdrawToggleWrapper.appendChild(withdrawToggle.span);
             toggleContainer.appendChild(withdrawToggleWrapper);
+
+            // --- Chunk Size Input ---
+            const chunkSizeWrapper = document.createElement('div');
+            chunkSizeWrapper.className = 'nuclear-toggle-row';
+            chunkSizeWrapper.style.marginTop = '10px';
+            chunkSizeWrapper.style.display = 'flex';
+            chunkSizeWrapper.style.alignItems = 'center';
+
+            const chunkLabel = document.createElement('label');
+            chunkLabel.className = 'nuclear-label';
+            chunkLabel.textContent = 'Chunk Size: ';
+            chunkLabel.style.marginRight = '5px';
+
+            const chunkInput = document.createElement('input');
+            chunkInput.type = 'number';
+            chunkInput.min = '1';
+            chunkInput.value = localStorage.getItem('nuclear_tags_chunk_size') || '200';
+            chunkInput.style.width = '60px';
+            chunkInput.style.padding = '2px';
+
+            chunkInput.addEventListener('change', (e) => {
+                let val = parseInt(e.target.value, 10);
+                if (!val || val < 1) val = 1; // Enforce positive integer
+                localStorage.setItem('nuclear_tags_chunk_size', val);
+            });
+
+            chunkSizeWrapper.appendChild(chunkLabel);
+            chunkSizeWrapper.appendChild(chunkInput);
+            toggleContainer.appendChild(chunkSizeWrapper);
+
+            // --- Benchmark Mode Toggle ---
+            const benchmarkWrapper = document.createElement('div');
+            benchmarkWrapper.className = 'nuclear-toggle-row';
+            benchmarkWrapper.style.marginLeft = '20px';
+
+            const benchmarkCheckbox = document.createElement('input');
+            benchmarkCheckbox.type = 'checkbox';
+            benchmarkCheckbox.id = 'mb-benchmark-mode';
+            benchmarkCheckbox.checked = localStorage.getItem('nuclear_tags_benchmark') === 'true';
+
+            const benchmarkLabel = document.createElement('label');
+            benchmarkLabel.className = 'nuclear-label';
+            benchmarkLabel.htmlFor = 'mb-benchmark-mode';
+            benchmarkLabel.textContent = 'Benchmark Mode';
+
+            benchmarkCheckbox.addEventListener('change', (e) => {
+                localStorage.setItem('nuclear_tags_benchmark', e.target.checked);
+            });
+
+            benchmarkWrapper.appendChild(benchmarkCheckbox);
+            benchmarkWrapper.appendChild(benchmarkLabel);
+            chunkSizeWrapper.appendChild(benchmarkWrapper);
 
 
             // --- Toggle Event Listeners (Daisy Chain Logic) ---
