@@ -1183,7 +1183,7 @@
 
                 if (isBulkAction) {
                     isBulkRunning = true;
-                    submitButton.disabled = true;
+                    // submitButton.disabled = true; // DELAYED to allow native click to fire
                 }
 
                 // Always save the tag/render buttons before any action
@@ -1237,6 +1237,7 @@
                     console.log(`[ElephantTags] Bulk TAG: Allowing native upvote. Starting cascade immediately.`);
 
                     setTimeout(async () => {
+                        submitButton.disabled = true; // Disable NOW, after native click has fired
                         try {
                             updateProgress(`Current entity action (native tag) complete. Starting bulk cascade...`);
 
@@ -1296,18 +1297,39 @@
                 // --- Execute Withdraw Action ---
                 if (apiEntityType && entityId) {
 
+
+                    // --- UNIVERSAL WITHDRAW: Use Native DOM Interaction for Current Entity ---
+                    // Whether bulk or single, we want the immediate visual feedback of clicking the "x"
+                    console.log(`[ElephantTags] WITHDRAW: Intercepting native upvote and performing native downvote click.`);
+                    updateProgress(`Withdrawing tag from current entity: ${tagText}...`);
+
+                    const tagsToWithdraw = tagText.split(',').map(t => t.trim()).filter(t => t);
+
+                    tagsToWithdraw.forEach(t => {
+                        let tagLink = null;
+                        const sidebarLinks = document.querySelectorAll('#sidebar a');
+                        for (const link of sidebarLinks) {
+                            if (link.textContent.trim() === t) {
+                                tagLink = link;
+                                break;
+                            }
+                        }
+
+                        if (tagLink) {
+                            const downvoteButton = tagLink.closest('li')?.querySelector('.tag-downvote');
+                            if (downvoteButton && !downvoteButton.disabled) {
+                                downvoteButton.click();
+                            }
+                        }
+                    });
+
+                    // Disable toggle button, as action is "done" for the UI part
+                    markWithdrawToggleAsStale(isBulkAction);
+
                     if (isBulkAction) {
-                        // --- BULK WITHDRAW: Custom AJAX for Current Entity + Cascade ---
-                        console.log(`[ElephantTags] BULK WITHDRAW: Intercepting native upvote and performing manual downvote for current entity and starting cascade.`);
-                        updateProgress(`Withdrawing tag from current entity: ${tagText}...`);
-
-                        // Use custom AJAX withdraw for current entity in the bulk path
-                        // NEW: Use submitTagsBatch logic
-                        const tags = tagText.split(',').map(t => t.trim()).filter(t => t);
-                        await submitTagsBatch([{ id: entityId, type: apiEntityType }], tags, 'withdraw');
-
-                        // Immediately mark as stale and update label
-                        markWithdrawToggleAsStale(true);
+                        // --- BULK CASCADE ---
+                        console.log(`[ElephantTags] BULK WITHDRAW: Current entity handled via DOM. Starting cascade...`);
+                        submitButton.disabled = true; // Disable to prevent re-entry
 
                         updateProgress(`Current entity action complete. Starting bulk cascade...`);
 
@@ -1343,43 +1365,11 @@
                                 submitButton.disabled = false;
                             }
 
-                        }, 100); // 100ms small delay to ensure native click is fully cancelled.
+                        }, 100);
 
                     } else {
-                        // --- SINGLE WITHDRAW: Using Text Match ---
-                        console.log(`[ElephantTags] SINGLE WITHDRAW: Intercepting native upvote and performing native downvote click for instant UI update.`);
-                        updateProgress(`Withdrawing tag from current entity: ${tagText}...`);
-
-                        const tagsToWithdraw = tagText.split(',').map(t => t.trim()).filter(t => t);
-
-                        tagsToWithdraw.forEach(t => {
-                            let tagLink = null;
-
-                            const sidebarLinks = document.querySelectorAll('#sidebar a');
-                            for (const link of sidebarLinks) {
-                                if (link.textContent.trim() === t) {
-                                    tagLink = link;
-                                    break;
-                                }
-                            }
-
-                            if (tagLink) {
-                                const downvoteButton = tagLink.closest('li')?.querySelector('.tag-downvote');
-
-                                if (downvoteButton && !downvoteButton.disabled) {
-                                    downvoteButton.click();
-                                    console.log(`[ElephantTags] SINGLE WITHDRAW: Clicked native downvote for "${t}". SUCCESS.`);
-                                } else {
-                                    console.log(`[ElephantTags] SINGLE WITHDRAW: Tag "${t}" found but downvote button not present/enabled.`);
-                                }
-                            } else {
-                                console.log(`[ElephantTags] SINGLE WITHDRAW: Tag "${t}" not found in sidebar list.`);
-                            }
-                        });
-
-                        // Action complete, disable the toggle and clear the progress message
-                        markWithdrawToggleAsStale(false);
-                        setTimeout(() => { updateProgress(''); }, 500); // Clear progress message quickly
+                        // Single action complete
+                        setTimeout(() => { updateProgress(''); }, 500);
                     }
                 }
 
