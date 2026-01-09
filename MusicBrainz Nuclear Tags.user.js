@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities (artist > release group > release > recordings).
-// @version      1.10-beta
+// @version      1.11-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
