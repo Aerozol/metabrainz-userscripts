@@ -9,6 +9,9 @@
 // @match        *://musicbrainz.org/artist/*
 // @match        *://beta.musicbrainz.org/artist/*
 // @match        *://test.musicbrainz.org/artist/*
+// @exclude      *://musicbrainz.org/artist/*/*
+// @exclude      *://beta.musicbrainz.org/artist/*/*
+// @exclude      *://test.musicbrainz.org/artist/*/*
 // @grant        GM_setClipboard
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
 // ==/UserScript==
