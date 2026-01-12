@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Adds a button to RYM artist pages to copy release data to clipboard. Adds a collapsible 'RYM Automator' field in MusicBrainz artist pages to paste the clipboard contents, check for matches with RYM entities, and the submit the release group links. Submitting release group links REQUIRES the MusicBrainz: add release(group) links from artist/label page' userscript.
 // @license      MIT
-// @version      1.0
+// @version      1.01
 // @author       Gemini
 // @match        *://rateyourmusic.com/artist/*
 // @match        *://musicbrainz.org/artist/*
@@ -51,7 +51,7 @@
                 const info = $(this);
                 const link = info.find('a.album, a.single, a.ep, a.release').first();
                 if (!link.length) return;
-                const title = link.text().replace(/[✅❌]/g, '').trim();
+                const title = link.text().replace(/[✅❌⏳]/g, '').trim();
                 let rawUrl = link.attr('href');
                 if (!rawUrl) return;
                 const fullUrl = rawUrl.startsWith('http') ? rawUrl : "https://rateyourmusic.com" + rawUrl;
@@ -166,7 +166,7 @@
                                             $iframe.on('load', function() {
                                                 const doc = this.contentDocument || this.contentWindow.document;
                                                 let pollInput = setInterval(() => {
-                                                    const urlInput = doc.querySelector('input[placeholder="Add link"]');
+                                                    const urlInput = doc.querySelector('input[placeholder="Add link"], input[placeholder="Add another link"]');
                                                     if (urlInput) {
                                                         clearInterval(pollInput);
                                                         linkBtn.text('⌛ Pasting...');
