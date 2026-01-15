@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities (artist > release group > release > recordings).
-// @version      1.12-beta
+// @version      1.13-beta
 // @downloadURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://github.com/chaban-mb/aerozol-metabrainz-userscripts/raw/Nuclear-Tags/refactor/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -19,6 +19,7 @@
     const STORAGE_KEY_SHORTCUTS = 'mbz_tag_shortcuts';
     const STORAGE_KEY_LAST_SUBMITTED = 'mbz_last_submitted_tag';
     const STORAGE_KEY_BULK_EXPANDED = 'mbz_elephant_tags_bulk_expanded';
+    const ENABLE_TEST_MODE = false; // Code-only flag for Test Mode (Chunk config & Benchmark)
     // Merge checkbox selector for Release Groups and Releases
     const MERGE_CHECKBOX_SELECTOR = 'input[name="add-to-merge"]';
     // Custom checkbox selector for Recordings
@@ -158,6 +159,10 @@
 
     function setBulkExpandedState(isExpanded) {
         GM_setValue(STORAGE_KEY_BULK_EXPANDED, isExpanded);
+    }
+
+    function getExpertModeState() {
+        return ENABLE_TEST_MODE;
     }
 
     // ----------------------------------------------------------------------
@@ -301,7 +306,10 @@
         const clientVersion = 'MusicBrainzNuclearTags-1.5';
         const url = `${location.origin}/ws/2/tag?client=${clientVersion}`;
         const savedChunkSize = localStorage.getItem('nuclear_tags_chunk_size');
-        const CHUNK_SIZE = savedChunkSize ? parseInt(savedChunkSize, 10) : 200;
+        let CHUNK_SIZE = 200;
+        if (getExpertModeState() && savedChunkSize) {
+            CHUNK_SIZE = parseInt(savedChunkSize, 10) || 200;
+        }
 
         // Chunk the entities
         const chunks = [];
@@ -312,7 +320,7 @@
         console.log(`[ElephantTags] Batch Submission: Processing ${entityList.length} entities in ${chunks.length} chunks.`);
         let allSuccess = true;
 
-        const isBenchmark = localStorage.getItem('nuclear_tags_benchmark') === 'true';
+        const isBenchmark = getExpertModeState() && localStorage.getItem('nuclear_tags_benchmark') === 'true';
         const metrics = [];
         const totalStart = performance.now();
 
@@ -1085,57 +1093,67 @@
             withdrawToggleWrapper.appendChild(withdrawToggle.span);
             toggleContainer.appendChild(withdrawToggleWrapper);
 
-            // --- Chunk Size Input ---
-            const chunkSizeWrapper = document.createElement('div');
-            chunkSizeWrapper.className = 'nuclear-toggle-row';
-            chunkSizeWrapper.style.marginTop = '10px';
-            chunkSizeWrapper.style.display = 'flex';
-            chunkSizeWrapper.style.alignItems = 'center';
+            if (getExpertModeState()) {
+                const advancedSettingsWrapper = document.createElement('div');
+                advancedSettingsWrapper.style.display = 'block';
+                advancedSettingsWrapper.style.borderTop = '1px solid #eee';
+                advancedSettingsWrapper.style.marginTop = '4px';
+                advancedSettingsWrapper.style.paddingTop = '4px';
 
-            const chunkLabel = document.createElement('label');
-            chunkLabel.className = 'nuclear-label';
-            chunkLabel.textContent = 'Chunk Size: ';
-            chunkLabel.style.marginRight = '5px';
+                // --- Chunk Size Input ---
+                const chunkSizeWrapper = document.createElement('div');
+                chunkSizeWrapper.className = 'nuclear-toggle-row';
+                chunkSizeWrapper.style.marginTop = '10px';
+                chunkSizeWrapper.style.display = 'flex';
+                chunkSizeWrapper.style.alignItems = 'center';
 
-            const chunkInput = document.createElement('input');
-            chunkInput.type = 'number';
-            chunkInput.min = '1';
-            chunkInput.value = localStorage.getItem('nuclear_tags_chunk_size') || '200';
-            chunkInput.style.width = '60px';
-            chunkInput.style.padding = '2px';
+                const chunkLabel = document.createElement('label');
+                chunkLabel.className = 'nuclear-label';
+                chunkLabel.textContent = 'Chunk Size: ';
+                chunkLabel.style.marginRight = '5px';
 
-            chunkInput.addEventListener('change', (e) => {
-                let val = parseInt(e.target.value, 10);
-                if (!val || val < 1) val = 1; // Enforce positive integer
-                localStorage.setItem('nuclear_tags_chunk_size', val);
-            });
+                const chunkInput = document.createElement('input');
+                chunkInput.type = 'number';
+                chunkInput.min = '1';
+                chunkInput.value = localStorage.getItem('nuclear_tags_chunk_size') || '200';
+                chunkInput.style.width = '60px';
+                chunkInput.style.padding = '2px';
 
-            chunkSizeWrapper.appendChild(chunkLabel);
-            chunkSizeWrapper.appendChild(chunkInput);
-            toggleContainer.appendChild(chunkSizeWrapper);
+                chunkInput.addEventListener('change', (e) => {
+                    let val = parseInt(e.target.value, 10);
+                    if (!val || val < 1) val = 1; // Enforce positive integer
+                    localStorage.setItem('nuclear_tags_chunk_size', val);
+                });
 
-            // --- Benchmark Mode Toggle ---
-            const benchmarkWrapper = document.createElement('div');
-            benchmarkWrapper.className = 'nuclear-toggle-row';
-            benchmarkWrapper.style.marginLeft = '20px';
+                chunkSizeWrapper.appendChild(chunkLabel);
+                chunkSizeWrapper.appendChild(chunkInput);
+                advancedSettingsWrapper.appendChild(chunkSizeWrapper);
 
-            const benchmarkCheckbox = document.createElement('input');
-            benchmarkCheckbox.type = 'checkbox';
-            benchmarkCheckbox.id = 'mb-benchmark-mode';
-            benchmarkCheckbox.checked = localStorage.getItem('nuclear_tags_benchmark') === 'true';
+                // --- Benchmark Mode Toggle ---
+                const benchmarkWrapper = document.createElement('div');
+                benchmarkWrapper.className = 'nuclear-toggle-row';
+                benchmarkWrapper.style.marginLeft = '20px';
 
-            const benchmarkLabel = document.createElement('label');
-            benchmarkLabel.className = 'nuclear-label';
-            benchmarkLabel.htmlFor = 'mb-benchmark-mode';
-            benchmarkLabel.textContent = 'Benchmark Mode';
+                const benchmarkCheckbox = document.createElement('input');
+                benchmarkCheckbox.type = 'checkbox';
+                benchmarkCheckbox.id = 'mb-benchmark-mode';
+                benchmarkCheckbox.checked = localStorage.getItem('nuclear_tags_benchmark') === 'true';
 
-            benchmarkCheckbox.addEventListener('change', (e) => {
-                localStorage.setItem('nuclear_tags_benchmark', e.target.checked);
-            });
+                const benchmarkLabel = document.createElement('label');
+                benchmarkLabel.className = 'nuclear-label';
+                benchmarkLabel.htmlFor = 'mb-benchmark-mode';
+                benchmarkLabel.textContent = 'Benchmark Mode';
 
-            benchmarkWrapper.appendChild(benchmarkCheckbox);
-            benchmarkWrapper.appendChild(benchmarkLabel);
-            chunkSizeWrapper.appendChild(benchmarkWrapper);
+                benchmarkCheckbox.addEventListener('change', (e) => {
+                    localStorage.setItem('nuclear_tags_benchmark', e.target.checked);
+                });
+
+                benchmarkWrapper.appendChild(benchmarkCheckbox);
+                benchmarkWrapper.appendChild(benchmarkLabel);
+                chunkSizeWrapper.appendChild(benchmarkWrapper);
+
+                toggleContainer.appendChild(advancedSettingsWrapper);
+            }
 
 
             // --- Toggle Event Listeners (Daisy Chain Logic) ---
