@@ -125,7 +125,7 @@
     let progressDisplay = null;
     let isBulkRunning = false;
 
-    // --- Re-initialization Function (Non-destructive rebinding) ---
+
 
 
     // ----------------------------------------------------------------------
@@ -217,11 +217,8 @@
         }
     }
 
-    function renderTagButtons(container, tags, input, submitButton) {
-        if (formContentObserver) {
-            // Do NOT disconnect observer here. Rely on setupFormContentObserver to manage it.
-        }
 
+    function renderTagButtons(container, tags, input, submitButton) {
         const oldButtons = container.querySelectorAll('.brain-tag-button, .repeat-tag-button, .tag-shortcut-btn');
         oldButtons.forEach(btn => btn.remove());
 
@@ -280,9 +277,6 @@
             insertButton(btn);
         });
 
-        if (formContentObserver) {
-            // Do NOT re-attach observer here. Rely on setupFormContentObserver to manage it.
-        }
     }
 
     // ----------------------------------------------------------------------
@@ -559,12 +553,6 @@
      * @returns {Promise<{releaseGroup: {id: string, title: string}|null, recordings: Array<{id: string, title: string}>, isCached: boolean}>}
      */
     async function fetchReleaseData(releaseId, incParams = []) {
-        // Check individual caches to determine if we need to fetch
-        // but since we are doing bulk ops, we mainly care about not hitting the same thing twice in one run.
-        // For now, we will rely on individual caches for components or just fetch.
-        // Actually, let's just do fresh fetch for simplified bulk logic or check individual caches?
-        // Let's implement smart caching: check if we have what we need.
-
         const needsRG = incParams.includes('release-groups');
         const needsRecs = incParams.includes('recordings');
 
@@ -1180,31 +1168,7 @@
                     isToggledRGs = rgToggle.checkbox.checked;
                 }
 
-                // 2. Apply Daisy Chain Logic (Updates UI from bottom up) (DISABLED TO ALLOW FOR SELECTING SEPARATE 'LEVELS')
-                //   if (recordingToggle) {
-                //       if (isToggledRecordings) {
-                //           if (releaseToggle) {
-                //               isToggledReleases = true;
-                //               releaseToggle.checkbox.checked = true;
-                //           }
-                //           if (masterToggle) {
-                //               if (pageContext === 'release') {
-                //                   isToggledRecordings = true;
-                //               } else {
-                //                   isToggledRGs = true;
-                //               }
-                //               masterToggle.checkbox.checked = true;
-                //           }
-                //       }
-                //   }
-                //   if (releaseToggle) {
-                //       if (isToggledReleases && masterToggle) {
-                //           if (pageContext !== 'release') {
-                //               isToggledRGs = true;
-                //               masterToggle.checkbox.checked = true;
-                //           }
-                //       }
-                //   }
+
 
                 // 3. Sync Native Merge Checkboxes
                 const masterToggled = masterToggle.checkbox.checked;
