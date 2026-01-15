@@ -2,25 +2,150 @@
 // @name         MusicBrainz Quick Join Phrases
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Click to add common join phrases (release editor)
-// @version      1
+// @version      1.1
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Join%20Phrases.user.js
 // @updateURL    https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Join%20Phrases.user.js
 // @license      MIT
 // @author       ChatGPT
 // @match        *://*.musicbrainz.org/release/add*
 // @match        *://*.musicbrainz.org/release/*/edit*
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // ==/UserScript==
 
 (function () {
     'use strict';
 
-    const phrases = [
+    // Default phrases - spaces are preserved exactly as written
+    const defaultPhrases = [
         ' & ',
         ' feat. ',
         ' narrated by ',
-        ' read by '
+        ' read by ',
+        ' עם ',
+        ' ו'  // space before, no space after
     ];
+
+    // Get saved phrases or use defaults
+    function getPhrases() {
+        const saved = GM_getValue('customJoinPhrases', null);
+        return saved ? JSON.parse(saved) : defaultPhrases;
+    }
+
+    // Save phrases
+    function savePhrases(phrases) {
+        GM_setValue('customJoinPhrases', JSON.stringify(phrases));
+    }
+
+    // Configuration dialog
+    function showConfigDialog() {
+        const currentPhrases = getPhrases();
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 10000;
+            min-width: 400px;
+            direction: ltr;
+        `;
+
+        dialog.innerHTML = `
+            <h3 style="margin-top: 0;">Configure Join Phrases</h3>
+            <p style="font-size: 12px; color: #666; margin-bottom: 15px;">
+                Enter one phrase per line. <strong>Spaces are preserved exactly as you type them.</strong><br>
+                Examples:<br>
+                • <code style="background: #f0f0f0; padding: 2px 4px;"> & </code> (space before and after)<br>
+                • <code style="background: #f0f0f0; padding: 2px 4px;"> ו</code> (space before, no space after)<br>
+                • <code style="background: #f0f0f0; padding: 2px 4px;">ו </code> (no space before, space after)
+            </p>
+            <textarea id="joinPhrasesInput" style="
+                width: 100%;
+                height: 200px;
+                font-family: monospace;
+                font-size: 13px;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                box-sizing: border-box;
+                direction: ltr;
+                unicode-bidi: plaintext;
+                white-space: pre;
+            ">${currentPhrases.join('\n')}</textarea>
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="resetBtn" style="padding: 8px 15px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;">
+                    Reset to Defaults
+                </button>
+                <button id="cancelBtn" style="padding: 8px 15px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;">
+                    Cancel
+                </button>
+                <button id="saveBtn" style="padding: 8px 15px; cursor: pointer; background: #5cb85c; color: white; border: 1px solid #4cae4c; border-radius: 4px;">
+                    Save
+                </button>
+            </div>
+        `;
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+        `;
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(dialog);
+
+        const textarea = dialog.querySelector('#joinPhrasesInput');
+        const saveBtn = dialog.querySelector('#saveBtn');
+        const cancelBtn = dialog.querySelector('#cancelBtn');
+        const resetBtn = dialog.querySelector('#resetBtn');
+
+        function closeDialog() {
+            overlay.remove();
+            dialog.remove();
+        }
+
+        saveBtn.addEventListener('click', () => {
+            const input = textarea.value;
+            const phrases = input
+                .split('\n')
+                .filter(line => line.length > 0); // Keep empty lines out, but preserve all spacing
+
+            if (phrases.length === 0) {
+                alert('Please enter at least one join phrase.');
+                return;
+            }
+
+            savePhrases(phrases);
+            alert('Join phrases saved! Reload the page to see changes.');
+            closeDialog();
+        });
+
+        cancelBtn.addEventListener('click', closeDialog);
+        overlay.addEventListener('click', closeDialog);
+
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Reset to default join phrases?')) {
+                textarea.value = defaultPhrases.join('\n');
+            }
+        });
+    }
+
+    // Register menu command for configuration
+    GM_registerMenuCommand('Configure Join Phrases', showConfigDialog);
+
+    const phrases = getPhrases();
 
     function insertPhrase(input, phrase) {
         input.focus();
@@ -36,6 +161,18 @@
         if (doneBtn) {
             doneBtn.click();
         }
+    }
+
+    // Helper to display phrase with visible spaces for button text
+    function getDisplayText(phrase) {
+        // Show the phrase, replacing leading/trailing spaces with a visible indicator
+        let display = phrase;
+
+        // Optional: You could add visual indicators for spaces
+        // Uncomment if you want to show spaces as · in the button
+        // display = phrase.replace(/^ /, '·').replace(/ $/, '·');
+
+        return display.trim() || phrase; // Fallback to original if trimming makes it empty
     }
 
     function addFloatingButtonBox() {
@@ -70,8 +207,8 @@
             // Join phrase button
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.textContent = phrase.trim();
-            btn.title = `Insert join phrase "${phrase.trim()}"`;
+            btn.textContent = getDisplayText(phrase);
+            btn.title = `Insert join phrase: "${phrase}"`;
             btn.style.cssText = `
                 width: 80px;
                 font-size: 11px;
@@ -83,6 +220,8 @@
                 border-radius: 4px 0 0 4px;
                 text-align: center;
                 user-select: none;
+                direction: ltr;
+                unicode-bidi: plaintext;
             `;
             btn.addEventListener('click', () => {
                 insertPhrase(targetInput, phrase);
@@ -92,7 +231,7 @@
             const tick = document.createElement('button');
             tick.type = 'button';
             tick.textContent = '✔';
-            tick.title = `Insert "${phrase.trim()}" and click Done`;
+            tick.title = `Insert "${phrase}" and click Done`;
             tick.style.cssText = `
                 width: 30px;
                 font-size: 11px;
