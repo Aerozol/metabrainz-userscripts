@@ -22,9 +22,7 @@
         ' & ',
         ' feat. ',
         ' narrated by ',
-        ' read by ',
-        ' עם ',
-        ' ו'  // space before, no space after
+        ' read by ', // space before, no space after
     ];
 
     // Get saved phrases or use defaults
