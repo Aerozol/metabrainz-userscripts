@@ -22,7 +22,7 @@
         ' & ',
         ' feat. ',
         ' narrated by ',
-        ' read by ', // space before, no space after
+        ' read by ',
     ];
 
     // Get saved phrases or use defaults
@@ -61,8 +61,8 @@
                 Enter one phrase per line. <strong>Spaces are preserved exactly as you type them.</strong><br>
                 Examples:<br>
                 • <code style="background: #f0f0f0; padding: 2px 4px;"> & </code> (space before and after)<br>
-                • <code style="background: #f0f0f0; padding: 2px 4px;"> ו</code> (space before, no space after)<br>
-                • <code style="background: #f0f0f0; padding: 2px 4px;">ו </code> (no space before, space after)
+                • <code style="background: #f0f0f0; padding: 2px 4px;"> /</code> (space before, no space after)<br>
+                • <code style="background: #f0f0f0; padding: 2px 4px;">/ </code> (no space before, space after)
             </p>
             <textarea id="joinPhrasesInput" style="
                 width: 100%;
