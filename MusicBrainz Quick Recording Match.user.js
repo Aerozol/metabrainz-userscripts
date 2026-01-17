@@ -2,14 +2,15 @@
 // @name        MusicBrainz Quick Recording Match
 // @namespace   https://github.com/Aerozol/metabrainz-userscripts
 // @description Select the first recording search result for each track, in the release editor Recordings tab.
-// @version     5.18
+// @version     5.19
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @license     MIT
 // @author      Google Gemini
 // @match       *://*.musicbrainz.org/release/*/edit*
 // @match       *://*.musicbrainz.org/release/add*
-// @grant       none
+// @grant       GM_getValue
+// @grant       GM_setValue
 // @run-at      document-idle
 // ==/UserScript==
 
@@ -21,8 +22,8 @@
     let editButtons;
     let mainButtons;
     let currentTrackRow = null;
-    let ignoredConfidenceLevel = 'none'; // Default to ignoring nothing
-    let matchingMethod = 'suggested'; // Default to 'suggested'
+    let ignoredConfidenceLevel = GM_getValue('ignoredConfidenceLevel', 'none');
+    let matchingMethod = GM_getValue('matchingMethod', 'suggested');
     const confidenceColors = {
         'yellow': '#fff176',
         'orange': '#ffc778',
@@ -220,8 +221,11 @@
 
         select.addEventListener('change', (event) => {
             ignoredConfidenceLevel = event.target.value;
+            GM_setValue('ignoredConfidenceLevel', ignoredConfidenceLevel);
             console.log(`Ignoring confidence level set to: ${ignoredConfidenceLevel}`);
         });
+
+        select.value = ignoredConfidenceLevel;
 
         container.appendChild(select);
         return container;
@@ -267,8 +271,11 @@
 
         select.addEventListener('change', (event) => {
             matchingMethod = event.target.value;
+            GM_setValue('matchingMethod', matchingMethod);
             console.log(`Matching method set to: ${matchingMethod}`);
         });
+
+        select.value = matchingMethod;
 
         container.appendChild(select);
         return container;
