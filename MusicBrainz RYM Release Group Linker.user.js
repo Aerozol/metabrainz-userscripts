@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MusicBrainz RYM Release Group Linker
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @description  Adds a button to RYM artist pages to copy data to clipboard and a field in MB artist pages to paste, compare and click to add external links if confirmed. Adding external links REQUIRES the MusicBrainz: add release(group) links from artist/label page' userscript.
+// @description  Copy RYM artist data to clipboard and compare in MB artist pages. Click to add links REQUIRES the MusicBrainz: add release(group) links from artist/label page' userscript.
 // @license      MIT
 // @version      1.02
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Release%20Linker.user.js
