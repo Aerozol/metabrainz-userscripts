@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         MusicBrainz RYM Release Group Linker
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @description  Copy RYM artist data to clipboard and compare in MB artist pages. Click to add links REQUIRES the MusicBrainz: add release(group) links from artist/label page' userscript.
+// @description  Copy RYM artist data to clipboard and compare in MB artist pages. Click to add links REQUIRES the MusicBrainz: 'add release(group) links from artist/label page' userscript.
 // @license      MIT
-// @version      1.02
+// @version      1.03
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Release%20Linker.user.js
 // @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20RYM%20Release%20Linker.user.js
 // @author       Gemini
@@ -21,14 +21,11 @@
 (function() {
     'use strict';
 
-    // Global CSS for Stealth Hiding and Styled UI
+    // Global CSS
     const style = document.createElement('style');
     style.innerHTML = `
-        /* --- STEALTH HIDING (Regression Fix: Ensure background table is truly hidden) --- */
-        table:has(> iframe[id$="-iframe"]),
-        iframe[id$="-iframe"],
-        tr.edit-relationship,
-        .rel-editor-inline {
+        /* --- TARGETED HIDING (Only hides the relationship editor elements) --- */
+        .rym-stealth-hide {
             display: none !important;
             height: 0 !important;
             width: 0 !important;
@@ -38,7 +35,7 @@
             position: absolute !important;
         }
 
-        /* --- UI STYLING (Matching Quick Join Phrases) --- */
+        /* --- UI STYLING --- */
         .rym-match-row {
             display: flex;
             align-items: center;
@@ -161,20 +158,12 @@
             container.append(header).append(content);
             $('#content h2').first().after(container).after('<div style="clear:both"></div>');
 
-            // Regression Fix: Instant toggle (no reload)
             header.on('click', function() {
                 isExpanded = !content.is(':visible');
                 localStorage.setItem('rym-automator-expanded', isExpanded);
-
                 content.toggle();
-                container.css({
-                    'float': isExpanded ? 'none' : 'right',
-                    'width': isExpanded ? '100%' : 'auto'
-                });
-                header.css({
-                    'padding': isExpanded ? '8px 15px' : '4px 10px',
-                    'border-bottom': isExpanded ? '1px solid #ccc' : 'none'
-                });
+                container.css({ 'float': isExpanded ? 'none' : 'right', 'width': isExpanded ? '100%' : 'auto' });
+                header.css({ 'padding': isExpanded ? '8px 15px' : '4px 10px', 'border-bottom': isExpanded ? '1px solid #ccc' : 'none' });
                 $('#rym-ui-title').text(isExpanded ? 'RYM → MB Automator' : 'RYM Automator');
                 $('#rym-ui-icon').text(isExpanded ? '▼' : '◀');
             });
@@ -193,8 +182,6 @@
                         rymData.filter(r => isFuzzyMatch(mbTitle, r.title)).forEach((match) => {
                             const isYearMatch = mbYear === match.year;
                             const rowWrapper = $('<div class="rym-match-row"></div>');
-
-                            // Regression Fix: Added match.type back to the button text
                             const linkBtn = $('<button class="rym-link-btn"></button>')
                                 .text(`Link: ${match.title} [${match.type} (${match.year})]`)
                                 .addClass(isYearMatch ? 'rym-year-match' : '');
@@ -216,18 +203,18 @@
                                         const $iframe = $('#' + mbid + '-iframe');
                                         if ($iframe.length) {
                                             clearInterval(pollIframe);
-                                            $iframe.closest('table').attr('style', 'display:none !important');
+
+                                            // SURGICAL HIDING: Hide ONLY the table and iframe being used for automation
+                                            $iframe.addClass('rym-stealth-hide');
+                                            $iframe.closest('table').addClass('rym-stealth-hide');
 
                                             $iframe.on('load', function() {
                                                 const doc = this.contentDocument || this.contentWindow.document;
-
-                                                // Regression Fix: Robust automation flow to prevent looping
                                                 let pollInput = setInterval(() => {
                                                     const urlInput = doc.querySelector('input[placeholder*="link"]');
                                                     if (urlInput) {
                                                         clearInterval(pollInput);
                                                         linkBtn.text('⌛ Pasting...');
-
                                                         urlInput.focus();
                                                         doc.execCommand('insertText', false, match.url);
                                                         urlInput.dispatchEvent(new Event('input', { bubbles: true }));
