@@ -14,6 +14,9 @@
 // @exclude      *://musicbrainz.org/artist/*/*
 // @exclude      *://beta.musicbrainz.org/artist/*/*
 // @exclude      *://test.musicbrainz.org/artist/*/*
+// @exclude      *://musicbrainz.org/artist/create
+// @exclude      *://beta.musicbrainz.org/artist/create
+// @exclude      *://test.musicbrainz.org/artist/create
 // @grant        GM_setClipboard
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
 // ==/UserScript==
