@@ -87,8 +87,15 @@
     function cleanTitle(str) {
         if (!str) return "";
         return str.toLowerCase()
+            // Ignore emojis added by 'MusicBrainz RYM Link Checker' userscript
             .replace(/[✅❌❓➕➖⏳\u2795\u2796\u274c\u2705\u2753]/g, '')
+            // Ignore common suffixes
             .replace(/\b(original soundtrack|soundtrack|ost|the ep|ep|lp|album|dj mix)\b/g, '')
+            // Normalize typographical apostrophes
+            .replace(/[\u2018\u2019\u201a\u201b\u2032\u2035]/g, "'")
+            // Normalize various dashes
+            .replace(/[\u2013\u2014\u2015\u2212]/g, "-")
+            // Convert punctuation to spaces for easier comparison
             .replace(/[:\-–—]/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
