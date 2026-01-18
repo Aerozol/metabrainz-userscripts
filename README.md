@@ -98,6 +98,25 @@ Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probab
   <img src="https://raw.githubusercontent.com/Aerozol/Dump/refs/heads/main/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
+### <a name="musicbrainz_rym_release_group_linker"></a> MusicBrainz RYM Release Group Linker
+
+Adds a button to RYM artist pages to copy data to clipboard and a field in MB artist pages to paste, compare and click to add external links if confirmed.
+Adding external links REQUIRES the '
+[MusicBrainz: add release(group) links from artist/label page](https://codeberg.org/RandomMushroom128/userscripts/src/branch/main/mb_add_release%28group%29_links_from_level_above.user.js)
+' userscript.
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20RYM%20Release%20Group%20Linker.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source""> 
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20RYM%20Release%20Group%20Linker.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install"">
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/rym_release_group_linker.png" target="_blank">
+  <img src="https://raw.githubusercontent.com/Aerozol/Dump/refs/heads/main/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
 ### <a name="musicbrainz_seed_artist_relationships_from_linktree"></a> MusicBrainz seed artist relationships from Linktr.ee
 
 Seed MusicBrainz artist URL relationships from Linktr.ee, heavily leaning on loujine's [create entity/fill data from wikidata/wikipedia/ISNI/VIAF script](https://github.com/loujine/musicbrainz-scripts/blob/master/mb-edit-create_from_wikidata.user.js). Works.
