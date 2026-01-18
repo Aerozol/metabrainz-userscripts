@@ -103,7 +103,7 @@ Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probab
 Adds a button to RYM artist pages to copy data to clipboard and a field in MB artist pages to paste, compare and click to add external links if confirmed.
 Adding external links REQUIRES the '
 [MusicBrainz: add release(group) links from artist/label page](https://codeberg.org/RandomMushroom128/userscripts/src/branch/main/mb_add_release%28group%29_links_from_level_above.user.js)
-' userscript.
+' userscript. Hacked together and not very tested.
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20RYM%20Release%20Group%20Linker.user.js">
   <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source""> 
