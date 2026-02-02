@@ -4,6 +4,8 @@
 // @description  Copy RYM or Discogs 'release group' data to clipboard and compare and link from MB artist pages. Incorporates RandomMushroom128's 'MusicBrainz: add release(group) links from level above' userscript.
 // @license      GPL
 // @version      1.10
+// @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Release%20Group%20Linker.user.js
+// @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Release%20Group%20Linker.user.js
 // @author       Gemini and RandomMushroom128
 // @match        *://rateyourmusic.com/artist/*
 // @match        *://www.discogs.com/artist/*
