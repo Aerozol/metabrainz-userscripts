@@ -954,6 +954,10 @@
                 } else if (document.querySelector('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR)) {
                     pageContext = 'artist';
                     masterToggleText = 'Tag selected release groups';
+                } else if (document.querySelector('table.tbl input[name="add-to-merge"]')) {
+                    // Fallback: Standalone recordings listed on the main artist page
+                    pageContext = 'artist_recordings';
+                    masterToggleText = 'Tag selected recordings';
                 }
             } else if (entityMatch[1] === 'label' && document.querySelector('table.tbl input[name="add-to-merge"]')) {
                 pageContext = 'label';
