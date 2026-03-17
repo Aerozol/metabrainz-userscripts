@@ -1232,18 +1232,42 @@
                 const domRelease = document.getElementById('mb-releases-toggle');
                 const domRec = document.getElementById('mb-recordings-toggle');
 
-                const isAnyToggleChecked = (domMaster && domMaster.checked) ||
-                    (domRg && domRg.checked) ||
-                    (domRelease && domRelease.checked) ||
-                    (domRec && domRec.checked);
+                const masterChecked = domMaster ? domMaster.checked : false;
 
+                let isToggledRGsNow = false;
+                let isToggledReleasesNow = false;
+                let isToggledRecordingsNow = false;
+
+                if (pageContext === 'artist') {
+                    isToggledRGsNow = masterChecked;
+                    isToggledReleasesNow = domRelease ? domRelease.checked : false;
+                    isToggledRecordingsNow = domRec ? domRec.checked : false;
+                } else if (pageContext === 'release_group') {
+                    isToggledReleasesNow = masterChecked;
+                    isToggledRecordingsNow = domRec ? domRec.checked : false;
+                } else if (pageContext === 'artist_releases' || pageContext === 'label') {
+                    isToggledReleasesNow = masterChecked;
+                    isToggledRGsNow = domRg ? domRg.checked : false;
+                    isToggledRecordingsNow = domRec ? domRec.checked : false;
+                } else if (pageContext === 'release') {
+                    isToggledRGsNow = domRg ? domRg.checked : false;
+                    isToggledRecordingsNow = masterChecked;
+                } else if (pageContext === 'artist_recordings') {
+                    isToggledRecordingsNow = masterChecked;
+                }
+
+                const isAnyToggleChecked = masterChecked || isToggledRGsNow || isToggledReleasesNow || isToggledRecordingsNow;
+
+                // STRICT EVALUATION: Only count checked boxes if the corresponding Nuclear toggle is active
                 const hasManualSelection = (
-                    pageContext === 'artist' && Array.from(document.querySelectorAll('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
+                    pageContext === 'artist' && isToggledRGsNow && Array.from(document.querySelectorAll('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
                 ) || (
-                        (pageContext === 'release-group' || pageContext === 'artist_releases' || pageContext === 'label') && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked')).filter(cb => cb.offsetParent !== null).length > 0
-                    ) || (
-                        (pageContext === 'release' || pageContext === 'artist_recordings') && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked, table.tbl ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
-                    );
+                    (pageContext === 'release-group' || pageContext === 'artist_releases' || pageContext === 'label') && isToggledReleasesNow && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked')).filter(cb => cb.offsetParent !== null).length > 0
+                ) || (
+                    pageContext === 'release' && isToggledRecordingsNow && Array.from(document.querySelectorAll('table.tbl ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
+                ) || (
+                    pageContext === 'artist_recordings' && isToggledRecordingsNow && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked')).filter(cb => cb.offsetParent !== null).length > 0
+                );
 
                 const isBulkAction = isAnyToggleChecked || hasManualSelection;
 
@@ -1261,32 +1285,6 @@
                 const apiEntityType = (['artist', 'release-group', 'release', 'recording', 'label', 'work', 'area', 'event', 'series'].includes(rawType))
                     ? rawType
                     : 'release'; // Fallback (though risky if wrong)
-
-
-
-                const masterChecked = domMaster ? domMaster.checked : false;
-
-                let isToggledRGsNow = false;
-                let isToggledReleasesNow = false;
-                let isToggledRecordingsNow = false;
-
-                if (pageContext === 'artist') {
-                    isToggledRGsNow = masterChecked;
-                    isToggledReleasesNow = domRelease ? domRelease.checked : false;
-                    isToggledRecordingsNow = domRec ? domRec.checked : false;
-                } else if (pageContext === 'release_group') {
-                    isToggledReleasesNow = masterChecked;
-                    isToggledRecordingsNow = domRec ? domRec.checked : false;
-                } else if (pageContext === 'artist_releases' || pageContext === 'label') {
-                    isToggledReleasesNow = masterChecked;
-                    isToggledRGsNow = domRg ? domRg.checked : false; // New RG toggle
-                    isToggledRecordingsNow = domRec ? domRec.checked : false;
-                } else if (pageContext === 'release') {
-                    isToggledRGsNow = domRg ? domRg.checked : false; // New RG toggle
-                    isToggledRecordingsNow = masterChecked;
-                } else if (pageContext === 'artist_recordings') {
-                    isToggledRecordingsNow = masterChecked;
-                }
 
 
                 // 1. SCENARIO: TAG (Native Upvote Flow)
@@ -1351,7 +1349,6 @@
                     }, 100); // 100ms small delay to ensure native click fires first
                     return;
                 }
-
 
                 // 2. SCENARIO: WITHDRAW (Custom Downvote Flow) - INTERRUPT native UPVOTE
                 e.preventDefault();
