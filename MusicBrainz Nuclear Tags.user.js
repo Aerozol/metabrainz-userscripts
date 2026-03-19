@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities.
-// @version      1.4
+// @version      1.5
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -954,6 +954,10 @@
                 } else if (document.querySelector('table.release-group-list ' + MERGE_CHECKBOX_SELECTOR)) {
                     pageContext = 'artist';
                     masterToggleText = 'Tag selected release groups';
+                } else if (document.querySelector('table.tbl input[name="add-to-merge"]')) {
+                    // Fallback: Standalone recordings listed on the main artist page
+                    pageContext = 'artist_recordings';
+                    masterToggleText = 'Tag selected recordings';
                 }
             } else if (entityMatch[1] === 'label' && document.querySelector('table.tbl input[name="add-to-merge"]')) {
                 pageContext = 'label';
