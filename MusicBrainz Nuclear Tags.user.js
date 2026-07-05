@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities.
-// @version      1.5
+// @version      1.6
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -297,7 +297,7 @@
     async function submitTagsBatch(entityList, tags, action) {
         if (!entityList.length || !tags.length) return false;
 
-        const clientVersion = 'MusicBrainzNuclearTags-1.5';
+        const clientVersion = 'MusicBrainzNuclearTags-1.6';
         const url = `${location.origin}/ws/2/tag?client=${clientVersion}`;
         const savedChunkSize = localStorage.getItem('nuclear_tags_chunk_size');
         let CHUNK_SIZE = 200;
@@ -327,17 +327,11 @@
                 await delay(1100); // Rate limit between chunks
             }
 
-            // Group entities by type
-            const groups = {
-                'artist': [],
-                'release-group': [],
-                'release': [],
-                'recording': [],
-                'label': []
-            };
-
+            // Group entities by type dynamically
+            const groups = {};
             chunk.forEach(e => {
-                if (groups[e.type]) groups[e.type].push(e.id);
+                if (!groups[e.type]) groups[e.type] = [];
+                groups[e.type].push(e.id);
             });
 
             // Construct XML
@@ -673,7 +667,15 @@
             // For Releases, we might hit the /cover-art link first (which has the ID but no text).
             // So we prefer a link that is NOT cover art if possible.
             const allLinks = Array.from(row.querySelectorAll(`a[href*="/${rootEntityType}/"]`));
-            let link = allLinks.find(a => !a.href.endsWith('/cover-art') && !a.closest('.release-group-list')); // Exclude different entity type if possible
+            let link = allLinks.find(a => {
+                const href = a.getAttribute('href') || '';
+                const isExactType = new RegExp(`^/${rootEntityType}/[0-9a-f-]+`, 'i').test(href) ||
+                                    new RegExp(`^https?://[^/]+/${rootEntityType}/[0-9a-f-]+`, 'i').test(href);
+                if (!isExactType) return false;
+                if (href.endsWith('/cover-art')) return false;
+                if (rootEntityType === 'release' && a.closest('.release-group-list')) return false;
+                return true;
+            });
 
             // Fallback: Just take the first one if we were too picky
             if (!link && allLinks.length > 0) link = allLinks[0];
@@ -760,8 +762,12 @@
             // visibleChecked.forEach(cb => cb.checked = false);
             visibleChecked.forEach(cb => {
                 const row = cb.closest('tr');
-                // Use generic link finder again for status icons
-                const link = row.querySelector(`a[href*="/${rootEntityType}/"]`);
+                const allLinks = Array.from(row.querySelectorAll(`a[href*="/${rootEntityType}/"]`));
+                const link = allLinks.find(a => {
+                    const href = a.getAttribute('href') || '';
+                    return new RegExp(`^/${rootEntityType}/[0-9a-f-]+`, 'i').test(href) ||
+                           new RegExp(`^https?://[^/]+/${rootEntityType}/[0-9a-f-]+`, 'i').test(href);
+                });
                 if (link) showTagStatus(link, tags.join(', '), true, false, isWithdraw);
             });
 
@@ -829,6 +835,17 @@
             checkboxSelector: `table.tbl input[name="add-to-merge"]:checked`,
             rootEntityType: 'recording',
             cascade: { root: true, releases: false, recordings: false }
+        });
+    }
+
+    // For Series pages
+    async function tagCheckedSeries(tagInput, actionType, rootEntityType, cascade) {
+        await orchestrateBulkTagging({
+            label: rootEntityType === 'release-group' ? 'RG' : rootEntityType.charAt(0).toUpperCase() + rootEntityType.slice(1),
+            tagInput, actionType,
+            checkboxSelector: `table.tbl ${RECORDING_CHECKBOX_SELECTOR}:checked`,
+            rootEntityType,
+            cascade
         });
     }
 
@@ -904,6 +921,46 @@
         });
     }
 
+    // --- Series Checkbox Injection ---
+    function addSeriesCheckboxes(table, isToggled) {
+        let headRow = table.querySelector('thead tr') || table.querySelector('tbody tr');
+
+        if (!headRow || headRow.querySelector('th.elephant-tag-col')) return;
+
+        const newHeader = document.createElement('th');
+        newHeader.classList.add('elephant-tag-col');
+        newHeader.title = 'Bulk Tag Series';
+
+        const masterCheckbox = document.createElement('input');
+        masterCheckbox.type = 'checkbox';
+        masterCheckbox.name = 'elephant-tag-master';
+        masterCheckbox.title = 'Toggle all visible tags';
+        masterCheckbox.checked = isToggled;
+
+        masterCheckbox.addEventListener('change', (e) => {
+            table.querySelectorAll(RECORDING_CHECKBOX_SELECTOR).forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+        });
+        headRow.prepend(newHeader);
+        newHeader.appendChild(masterCheckbox);
+
+        table.querySelectorAll('tbody > tr').forEach(row => {
+            if (row.classList.contains('subh') || row.querySelector('th') || !row.querySelector('td')) return;
+
+            const newCell = document.createElement('td');
+            newCell.classList.add('elephant-tag-col');
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = 'elephant-tag-checkbox';
+            checkbox.checked = isToggled;
+
+            row.prepend(newCell);
+            newCell.appendChild(checkbox);
+        });
+    }
+
     // ----------------------------------------------------------------------
     // UI Initialization & Rendering Logic
     // ----------------------------------------------------------------------
@@ -968,6 +1025,46 @@
             } else if (entityMatch[1] === 'release' && document.querySelector('table.tbl.medium')) {
                 pageContext = 'release';
                 masterToggleText = 'Tag selected recordings';
+            } else if (entityMatch[1] === 'series') {
+                const table = document.querySelector('table.tbl');
+                if (table) {
+                    let type = null;
+                    const firstRow = table.querySelector('tbody tr');
+                    if (firstRow) {
+                        const possibleTypes = [
+                            'release-group', 'release', 'recording', 'work', 'artist', 'event'
+                        ];
+                        for (const rootEntityType of possibleTypes) {
+                            const allLinks = Array.from(firstRow.querySelectorAll(`a[href*="/${rootEntityType}/"]`));
+                            const hasLink = allLinks.some(a => {
+                                const href = a.getAttribute('href') || '';
+                                const isExactType = new RegExp(`^/${rootEntityType}/[0-9a-f-]+`, 'i').test(href) ||
+                                                    new RegExp(`^https?://[^/]+/${rootEntityType}/[0-9a-f-]+`, 'i').test(href);
+                                if (!isExactType) return false;
+                                if (href.endsWith('/cover-art')) return false;
+                                if (rootEntityType === 'release' && a.closest('.release-group-list')) return false;
+                                return true;
+                            });
+                            if (hasLink) {
+                                type = rootEntityType;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (type) {
+                        pageContext = `series_${type.replace('-', '_')}`;
+                        const typeLabels = {
+                            'release-group': 'release groups',
+                            'release': 'releases',
+                            'recording': 'recordings',
+                            'work': 'works',
+                            'artist': 'artists',
+                            'event': 'events'
+                        };
+                        masterToggleText = `Tag selected ${typeLabels[type] || 'entities'}`;
+                    }
+                }
             }
         }
 
@@ -989,6 +1086,15 @@
 
             if (pageContext === 'release') {
                 addRecordingCheckboxes(isToggledRecordings);
+            } else if (pageContext.startsWith('series_')) {
+                const table = document.querySelector('table.tbl');
+                if (table) {
+                    let isToggled = false;
+                    if (pageContext === 'series_release_group') isToggled = isToggledRGs;
+                    else if (pageContext === 'series_release') isToggled = isToggledReleases;
+                    else if (pageContext === 'series_recording') isToggled = isToggledRecordings;
+                    addSeriesCheckboxes(table, isToggled);
+                }
             }
 
             const isBulkExpanded = getBulkExpandedState();
@@ -1047,14 +1153,14 @@
             masterToggle.checkbox.checked = isToggledRGs || isToggledRecordings;
             toggleContainer.appendChild(masterToggle.span);
 
-            if (pageContext === 'artist') {
+            if (pageContext === 'artist' || pageContext === 'series_release_group') {
                 releaseToggle = createCheckboxToggle('mb-releases-toggle', '↳ releases', '20px');
                 releaseToggle.checkbox.checked = isToggledReleases;
                 toggleContainer.appendChild(releaseToggle.span);
             }
 
             // NEW: Add Release Group toggle for Label, Artist Releases, and Release pages
-            if (pageContext === 'artist_releases' || pageContext === 'label') {
+            if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'series_release') {
                 // For Artist Releases page AND Label page: Master is Releases. Child is Recordings.
                 recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', '20px');
                 recordingToggle.checkbox.checked = isToggledRecordings;
@@ -1063,7 +1169,7 @@
 
             // NEW: Add Release Group toggle for Label, Artist Releases, and Release pages
             let rgToggle = null;
-            if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'release') {
+            if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'release' || pageContext === 'series_release') {
                 rgToggle = createCheckboxToggle('mb-rg-toggle', 'Release Group', '0px');
                 // We reuse isToggledRGs for state persistence, though it might be shared with Artist page RG master toggle.
                 // In this context, it's a child toggle.
@@ -1071,8 +1177,8 @@
                 toggleContainer.appendChild(rgToggle.span);
             }
 
-            if (pageContext !== 'release' && pageContext !== 'artist_releases' && pageContext !== 'artist_recordings' && pageContext !== 'label') {
-                recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', pageContext === 'artist' ? '40px' : '20px');
+            if (pageContext !== 'release' && pageContext !== 'artist_releases' && pageContext !== 'artist_recordings' && pageContext !== 'label' && pageContext !== 'series_release') {
+                recordingToggle = createCheckboxToggle('mb-recordings-toggle', '↳ recordings', (pageContext === 'artist' || pageContext === 'series_release_group') ? '40px' : '20px');
                 recordingToggle.checkbox.checked = isToggledRecordings;
                 toggleContainer.appendChild(recordingToggle.span);
             }
@@ -1152,11 +1258,11 @@
             const updateCheckboxState = () => {
                 // 1. Sync global state from checkboxes (for future UI injection/rebinds)
                 if (masterToggle) {
-                    if (pageContext === 'artist' || pageContext === 'release-group') {
+                    if (pageContext === 'artist' || pageContext === 'release-group' || pageContext === 'series_release_group') {
                         isToggledRGs = masterToggle.checkbox.checked;
-                    } else if (pageContext === 'artist_releases' || pageContext === 'label') {
+                    } else if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'series_release') {
                         isToggledReleases = masterToggle.checkbox.checked;
-                    } else if (pageContext === 'release' || pageContext === 'artist_recordings') {
+                    } else if (pageContext === 'release' || pageContext === 'artist_recordings' || pageContext === 'series_recording') {
                         isToggledRecordings = masterToggle.checkbox.checked;
                     }
                 }
@@ -1190,6 +1296,16 @@
                     });
                     const masterRecToggle = document.querySelector('input[name="elephant-tag-master"]');
                     if (masterRecToggle) masterRecToggle.checked = isToggledRecordings;
+                }
+
+                // 5. Sync Custom Series Checkboxes
+                if (pageContext.startsWith('series_')) {
+                    const toggledState = masterToggled;
+                    document.querySelectorAll(RECORDING_CHECKBOX_SELECTOR).forEach(cb => {
+                        cb.checked = toggledState;
+                    });
+                    const masterSeriesToggle = document.querySelector('input[name="elephant-tag-master"]');
+                    if (masterSeriesToggle) masterSeriesToggle.checked = toggledState;
                 }
             };
 
@@ -1242,21 +1358,21 @@
                 let isToggledReleasesNow = false;
                 let isToggledRecordingsNow = false;
 
-                if (pageContext === 'artist') {
+                if (pageContext === 'artist' || pageContext === 'series_release_group') {
                     isToggledRGsNow = masterChecked;
                     isToggledReleasesNow = domRelease ? domRelease.checked : false;
                     isToggledRecordingsNow = domRec ? domRec.checked : false;
                 } else if (pageContext === 'release_group') {
                     isToggledReleasesNow = masterChecked;
                     isToggledRecordingsNow = domRec ? domRec.checked : false;
-                } else if (pageContext === 'artist_releases' || pageContext === 'label') {
+                } else if (pageContext === 'artist_releases' || pageContext === 'label' || pageContext === 'series_release') {
                     isToggledReleasesNow = masterChecked;
                     isToggledRGsNow = domRg ? domRg.checked : false;
                     isToggledRecordingsNow = domRec ? domRec.checked : false;
                 } else if (pageContext === 'release') {
                     isToggledRGsNow = domRg ? domRg.checked : false;
                     isToggledRecordingsNow = masterChecked;
-                } else if (pageContext === 'artist_recordings') {
+                } else if (pageContext === 'artist_recordings' || pageContext === 'series_recording') {
                     isToggledRecordingsNow = masterChecked;
                 }
 
@@ -1271,6 +1387,8 @@
                     pageContext === 'release' && isToggledRecordingsNow && Array.from(document.querySelectorAll('table.tbl ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
                 ) || (
                     pageContext === 'artist_recordings' && isToggledRecordingsNow && Array.from(document.querySelectorAll('table.tbl input[name="add-to-merge"]:checked')).filter(cb => cb.offsetParent !== null).length > 0
+                ) || (
+                    pageContext.startsWith('series_') && Array.from(document.querySelectorAll('table.tbl ' + RECORDING_CHECKBOX_SELECTOR + ':checked')).filter(cb => cb.offsetParent !== null).length > 0
                 );
 
                 const isBulkAction = isAnyToggleChecked || hasManualSelection;
@@ -1321,6 +1439,14 @@
                                 await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow, isToggledRGsNow);
                             } else if (pageContext === 'artist_recordings') {
                                 await tagCheckedArtistRecordings(tagText, actionType);
+                            } else if (pageContext.startsWith('series_')) {
+                                const seriesType = pageContext.substring(7).replace('_', '-');
+                                await tagCheckedSeries(tagText, actionType, seriesType, {
+                                    root: masterChecked,
+                                    releases: isToggledReleasesNow,
+                                    recordings: isToggledRecordingsNow,
+                                    releaseGroups: isToggledRGsNow
+                                });
                             } else if (pageContext === 'release') {
 
                                 const incParams = [];
@@ -1412,6 +1538,14 @@
                                     await tagCheckedReleasesDirect(tagText, actionType, isToggledReleasesNow, isToggledRecordingsNow, isToggledRGsNow);
                                 } else if (pageContext === 'artist_recordings') {
                                     await tagCheckedArtistRecordings(tagText, actionType);
+                                } else if (pageContext.startsWith('series_')) {
+                                    const seriesType = pageContext.substring(7).replace('_', '-');
+                                    await tagCheckedSeries(tagText, actionType, seriesType, {
+                                        root: masterChecked,
+                                        releases: isToggledReleasesNow,
+                                        recordings: isToggledRecordingsNow,
+                                        releaseGroups: isToggledRGsNow
+                                    });
                                 } else if (pageContext === 'release') {
                                     if (isToggledRGsNow && entityId) {
                                         updateProgress('Processing Release Group...');
