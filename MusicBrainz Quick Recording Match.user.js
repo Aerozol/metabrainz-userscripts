@@ -308,11 +308,9 @@
             console.log("MusicBrainz Quick Tools Debug: Found target div, adding button container.");
             const buttonContainer = createButtonContainer();
             targetDiv.before(buttonContainer);
-        } else if (targetDiv) {
-            console.log("MusicBrainz Quick Tools Debug: Target div found, but buttons already exist. Skipping.");
-        } else {
-            console.log("MusicBrainz Quick Tools Debug: Target div not found.");
+            return true;
         }
+        return false;
     }
 
     function removeQuickToolsButtons() {
@@ -590,8 +588,9 @@ function initializeQuickTools() {
 
     // Only proceed if the recordings element exists and is currently visible
     if (recordingsTabContent && recordingsTabContent.getAttribute('aria-hidden') === 'false') {
-        addQuickToolsButtons();
-        highlightAllDifferences();
+        if (addQuickToolsButtons()) {
+            highlightAllDifferences();
+        }
     }
 }
 
