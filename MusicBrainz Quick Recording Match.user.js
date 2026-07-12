@@ -2,7 +2,7 @@
 // @name        MusicBrainz Quick Recording Match
 // @namespace   https://github.com/Aerozol/metabrainz-userscripts
 // @description Select the first recording search result for each track, in the release editor Recordings tab.
-// @version     5.19
+// @version     5.20
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20Recording%20Match.user.js
 // @license     MIT
@@ -96,6 +96,52 @@
         return null;
     }
 
+    function getCandidateConfidence(trackRow, candidate) {
+        const artistRow = trackRow.nextElementSibling;
+        const nameCells = trackRow.querySelectorAll('td.name');
+        const trackTitleCell = nameCells[0];
+        const trackLengthCell = trackRow.querySelector('td.length');
+        const trackArtistCell = artistRow?.querySelector('td[colspan="2"]:first-of-type > span');
+
+        const trackTitle = trackTitleCell?.querySelector('bdi')?.textContent.trim().toLowerCase();
+        const trackArtists = trackArtistCell?.textContent.trim().toLowerCase();
+
+        const candidateTitle = candidate.name?.trim().toLowerCase();
+        const candidateArtists = candidate.artist?.trim().toLowerCase();
+
+        let lengthDiff = 0;
+        if (trackLengthCell && candidate.length) {
+            const trackLengthMs = parseLengthToMs(trackLengthCell.textContent.trim());
+            const candidateLengthMs = parseLengthToMs(candidate.length);
+            if (trackLengthMs !== null && candidateLengthMs !== null) {
+                lengthDiff = Math.abs(trackLengthMs - candidateLengthMs);
+            }
+        }
+
+        const differences = [];
+        if (candidateTitle && trackTitle && trackTitle !== candidateTitle) {
+            differences.push('Title');
+        }
+        if (candidateArtists && trackArtists && trackArtists !== candidateArtists) {
+            differences.push('Artist');
+        }
+        if (lengthDiff > 0) {
+            differences.push(`Length (${Math.floor(lengthDiff / 1000)}s)`);
+        }
+
+        if (differences.length >= 3 && lengthDiff > 10000) {
+            return 'red';
+        } else if (lengthDiff > 15000) {
+            return 'dark-orange';
+        } else if (differences.length >= 2 && lengthDiff <= 15000) {
+            return 'orange';
+        } else if (differences.length === 1 || lengthDiff > 3000) {
+            return 'yellow';
+        }
+
+        return null;
+    }
+
     /**
      * Checks for differences and highlights the edit button for a single track row.
      * @param {HTMLElement} trackRow The <tr> element of the track to check.
@@ -159,6 +205,29 @@
         console.log("MusicBrainz Quick Tools: Starting difference highlighting for all tracks.");
         const trackRows = document.querySelectorAll('#track-recording-assignation tr.track');
         trackRows.forEach(highlightSingleTrack);
+    }
+
+    function setInputValue(element, value) {
+        let ok = false;
+        try {
+            element.focus();
+            element.setSelectionRange(0, element.value.length);
+            ok = value ? document.execCommand('insertText', false, value)
+                       : document.execCommand('delete', false, null);
+            if (ok && element.value !== value) ok = false;
+        } catch (e) { ok = false; }
+        if (!ok) {
+            const isTextArea = element instanceof window.HTMLTextAreaElement;
+            const prototype = isTextArea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+            const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+            if (descriptor && descriptor.set) {
+                descriptor.set.call(element, value);
+            } else {
+                element.value = value;
+            }
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        element.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     function createButton(text, onClickHandler) {
@@ -291,8 +360,10 @@
 
         const p1 = document.createElement('p');
         const autoLinkButton = createButton('Auto-link all tracks', startAutoLinking);
+        const isrcButton = createButton('Match by ISRC', openIsrcModal);
         const unlinkButton = createButton('Unlink all tracks', startUnlinking);
         p1.appendChild(autoLinkButton);
+        p1.appendChild(isrcButton);
         p1.appendChild(unlinkButton);
         p1.appendChild(createConfidenceDropdown());
         p1.appendChild(createMethodDropdown());
@@ -308,11 +379,9 @@
             console.log("MusicBrainz Quick Tools Debug: Found target div, adding button container.");
             const buttonContainer = createButtonContainer();
             targetDiv.before(buttonContainer);
-        } else if (targetDiv) {
-            console.log("MusicBrainz Quick Tools Debug: Target div found, but buttons already exist. Skipping.");
-        } else {
-            console.log("MusicBrainz Quick Tools Debug: Target div not found.");
+            return true;
         }
+        return false;
     }
 
     function removeQuickToolsButtons() {
@@ -540,6 +609,186 @@ if (matchingMethod === 'suggested') {
         });
     }
 
+    function openIsrcModal() {
+        const overlay = document.createElement('div');
+        overlay.id = 'quick-tools-isrc-overlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: white; padding: 20px; border-radius: 8px;
+            width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-family: inherit; display: flex; flex-direction: column; gap: 15px;
+        `;
+
+        modal.innerHTML = `
+            <h2 style="margin: 0; font-size: 1.2em;">Match Recordings by ISRC</h2>
+            <p style="margin: 0; font-size: 0.9em; color: #555;">
+                Paste a list of ISRCs below, one per line.<br>
+                Line 1 matches the track selected in the 'Start at' dropdown, Line 2 matches the next, etc.
+            </p>
+            <textarea id="isrc-paste-area" rows="15" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;" placeholder="US-RC1-76-09839\n..."></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" id="isrc-cancel-btn" style="padding: 6px 12px; cursor: pointer; border: 1px solid #ccc; background: #f8f8f8; border-radius: 4px;">Cancel</button>
+                <button type="button" id="isrc-start-btn" style="padding: 6px 12px; cursor: pointer; border: 1px solid transparent; background: #4CAF50; color: white; border-radius: 4px; font-weight: bold;">Start Matching</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        document.getElementById('isrc-cancel-btn').addEventListener('click', () => {
+            overlay.remove();
+        });
+
+        document.getElementById('isrc-start-btn').addEventListener('click', () => {
+            const isrcText = document.getElementById('isrc-paste-area').value;
+            overlay.remove();
+            startIsrcMatching(isrcText);
+        });
+    }
+
+    function startIsrcMatching(isrcText) {
+        const isrcs = isrcText.split('\n').map(s => s.trim());
+        const isrcButtons = document.querySelectorAll('.musicbrainz-quick-tool-button');
+        const isrcButton = Array.from(isrcButtons).find(btn => btn.textContent === 'Match by ISRC');
+        if (isrcButton) isrcButton.style.backgroundColor = '#ebbba0';
+
+        runProcess(() => {
+            const startAtDropdown = document.getElementById('start-at-dropdown');
+            const startIndex = startAtDropdown ? parseInt(startAtDropdown.value) : 0;
+
+            function processNextTrack() {
+                if (isCancelled || currentIndex >= editButtons.length) {
+                    if (isrcButton) isrcButton.style.backgroundColor = '#bceba0';
+                    removeCancelButton();
+                    enableMainButtons();
+                    highlightAllDifferences();
+                    return;
+                }
+
+                const listIndex = currentIndex - startIndex;
+                const remainingIsrcs = isrcs.slice(listIndex).some(s => s);
+                if (!remainingIsrcs) {
+                    if (isrcButton) isrcButton.style.backgroundColor = '#bceba0';
+                    removeCancelButton();
+                    enableMainButtons();
+                    highlightAllDifferences();
+                    return;
+                }
+
+                if (!isrcs[listIndex]) {
+                    // Blank ISRC provided for this track. Skip it.
+                    currentIndex++;
+                    processNextTrack();
+                    return;
+                }
+
+                const currentButton = editButtons[currentIndex];
+                const trackRow = currentButton.closest('tr.track');
+                currentButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                currentButton.click();
+
+                setTimeout(() => {
+                    const nextButton = document.querySelector('#recording-assoc-bubble button[data-click="nextTrack"]');
+                    const closeButton = document.querySelector('#recording-assoc-bubble button[data-click="close"]');
+                    const searchInput = document.querySelector('#recording-assoc-bubble input.name');
+                    const searchIcon = document.querySelector('#recording-assoc-bubble img.search');
+
+                    function advanceOrClose() {
+                        if (searchInput) searchInput.blur();
+                        document.querySelectorAll('.ui-autocomplete').forEach(el => el.style.display = 'none');
+                        const hasMore = isrcs.slice(listIndex + 1).some(s => s);
+                        if (hasMore && nextButton) {
+                            nextButton.click();
+                        } else {
+                            if (closeButton) closeButton.click();
+                        }
+                        currentIndex++;
+                        processNextTrack();
+                    }
+
+                    if (searchInput && searchIcon) {
+                        setInputValue(searchInput, isrcs[listIndex]);
+                        // searchIcon.click(); // Removed: setInputValue fires 'input' which triggers search automatically.
+                        console.log(`MusicBrainz Quick Tools: Searching ISRC for track ${currentIndex + 1}.`);
+
+                        const observer = new MutationObserver((mutations, obs) => {
+                            const autocompleteMenu = document.querySelector('.ui-autocomplete');
+                            if (!autocompleteMenu) return;
+
+                            const noResultsItem = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item')).find(item => item.textContent.includes('(No results)'));
+                            const searchResults = Array.from(document.querySelectorAll('.ui-autocomplete .ui-menu-item a')).filter(a => {
+                                return !a.textContent.includes('Switch back') && !a.textContent.includes('Add a new recording') && !a.textContent.includes('(No results)');
+                            });
+
+                            if (searchResults.length > 0) {
+                                obs.disconnect();
+
+                                let bestCandidate = null;
+                                let bestScore = -1;
+
+                                searchResults.forEach(a => {
+                                    const lengthSpan = a.querySelector('.autocomplete-length');
+                                    const lengthText = lengthSpan ? lengthSpan.textContent.trim() : null;
+
+                                    let title = '';
+                                    for (const node of a.childNodes) {
+                                        if (node.nodeType === Node.TEXT_NODE) {
+                                            title += node.textContent;
+                                        }
+                                    }
+                                    title = title.trim();
+
+                                    const artistSpan = Array.from(a.querySelectorAll('.autocomplete-comment')).find(span => span.textContent.trim().startsWith('by '));
+                                    const artist = artistSpan ? artistSpan.textContent.replace('by ', '').trim() : '';
+
+                                    const candidateData = { name: title, length: lengthText, artist: artist, element: a };
+                                    const confidence = getCandidateConfidence(trackRow, candidateData);
+
+                                    if (!shouldIgnore(confidence)) {
+                                        const score = confidence === null ? 4 : (confidence === 'yellow' ? 3 : (confidence === 'orange' ? 2 : (confidence === 'dark-orange' ? 1 : 0)));
+                                        if (score > bestScore) {
+                                            bestScore = score;
+                                            bestCandidate = candidateData;
+                                        }
+                                    }
+                                });
+
+                                if (bestCandidate) {
+                                    bestCandidate.element.click();
+                                    console.log(`MusicBrainz Quick Tools: Selected best match for ISRC on track ${currentIndex + 1}.`);
+                                    setTimeout(() => {
+                                        advanceOrClose();
+                                    }, 100);
+                                } else {
+                                    console.log(`MusicBrainz Quick Tools: No acceptable match found for track ${currentIndex + 1}. Unlinking.`);
+                                    const addNewRecordingButton = document.querySelector('#recording-assoc-bubble #add-new-recording');
+                                    if (addNewRecordingButton) addNewRecordingButton.click();
+                                    advanceOrClose();
+                                }
+                            } else if (noResultsItem) {
+                                obs.disconnect();
+                                console.log(`MusicBrainz Quick Tools: No ISRC results found for track ${currentIndex + 1}. Skipping.`);
+                                advanceOrClose();
+                            }
+                        });
+
+                        observer.observe(document.body, { childList: true, subtree: true });
+                    } else {
+                        console.log(`MusicBrainz Quick Tools: Could not find search input for track ${currentIndex + 1}. Skipping.`);
+                        advanceOrClose();
+                    }
+                }, 1000);
+            }
+            processNextTrack();
+        });
+    }
+
     function startUnlinking() {
         const unlinkButton = document.querySelectorAll('.musicbrainz-quick-tool-button')[1];
         unlinkButton.style.backgroundColor = '#ebbba0';
@@ -590,8 +839,9 @@ function initializeQuickTools() {
 
     // Only proceed if the recordings element exists and is currently visible
     if (recordingsTabContent && recordingsTabContent.getAttribute('aria-hidden') === 'false') {
-        addQuickToolsButtons();
-        highlightAllDifferences();
+        if (addQuickToolsButtons()) {
+            highlightAllDifferences();
+        }
     }
 }
 
