@@ -68,7 +68,7 @@ Adds a number of shortcuts that will fill some common join phrases into the seco
 
 ### <a name="musicbrainz_quick_recording_links"></a> MusicBrainz Quick Recording Match
 
-Adds buttons to the release editor "Recordings" tab to select the first recording search result for each track, and to unset all recordingsd. Works!
+Adds buttons to the release editor "Recordings" tab to auto-select the first recording suggestion/search result/or ISRC match for each track. Also visually flags mismatches and has a quick-unset recording feature. Works!
 
 <a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Quick%20Recording%20Match.user.js">
   <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
