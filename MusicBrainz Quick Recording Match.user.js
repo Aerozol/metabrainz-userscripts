@@ -361,13 +361,14 @@
         const p1 = document.createElement('p');
         const autoLinkButton = createButton('Auto-link all tracks', startAutoLinking);
         const isrcButton = createButton('Match by ISRC', openIsrcModal);
+        isrcButton.title = 'Requires companion script: MusicBrainz: Search by ISRC in release editor';
         const unlinkButton = createButton('Unlink all tracks', startUnlinking);
         p1.appendChild(autoLinkButton);
         p1.appendChild(isrcButton);
         p1.appendChild(unlinkButton);
         p1.appendChild(createConfidenceDropdown());
         p1.appendChild(createMethodDropdown());
-        p1.appendChild(createStartAtDropdown()); // Add the new dropdown here
+        p1.appendChild(createStartAtDropdown());
         fieldset.appendChild(p1);
 
         return fieldset;
@@ -630,6 +631,14 @@ if (matchingMethod === 'suggested') {
             <p style="margin: 0; font-size: 0.9em; color: #555;">
                 Paste a list of ISRCs below, one per line.<br>
                 Line 1 matches the track selected in the 'Start at' dropdown, Line 2 matches the next, etc.
+            </p>
+            <p style="margin: 0; padding: 8px 10px; font-size: 0.85em; background: #fff8e1; border-left: 3px solid #f9a825; border-radius: 2px; color: #555;">
+                ⚠️ Requires the companion script
+                <a href="https://github.com/chaban-mb/userscripts/raw/main/src/MusicBrainz%20Search%20by%20ISRC%20in%20release%20editor.user.js"
+                   target="_blank" rel="noopener noreferrer" style="color: #1a73e8;">
+                    MusicBrainz: Search by ISRC in release editor
+                </a>
+                to be installed and active.
             </p>
             <textarea id="isrc-paste-area" rows="15" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;" placeholder="US-RC1-76-09839\n..."></textarea>
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
