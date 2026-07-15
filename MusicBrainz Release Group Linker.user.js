@@ -1,14 +1,16 @@
 // ==UserScript==
 // @name         MusicBrainz Release Group Linker
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @description  Copy RYM or Discogs 'release group' data to clipboard and compare and link from MB artist pages. Incorporates RandomMushroom128's 'MusicBrainz: add release(group) links from level above' userscript.
+// @description  Copy RYM, Discogs, AllMusic or Musik-Sammler 'release group' data to clipboard and compare and link from MB artist pages. Incorporates RandomMushroom128's 'MusicBrainz: add release(group) links from level above' userscript.
 // @license      GPL
-// @version      1.10
+// @version      1.11
 // @downloadURL https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Release%20Group%20Linker.user.js
 // @updateURL   https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Release%20Group%20Linker.user.js
 // @author       Gemini and RandomMushroom128
 // @match        *://rateyourmusic.com/artist/*
 // @match        *://www.discogs.com/artist/*
+// @match        *://www.musik-sammler.de/artist/*
+// @match        *://www.allmusic.com/artist/*
 // @match        *://musicbrainz.org/artist/*
 // @match        *://beta.musicbrainz.org/artist/*
 // @match        *://test.musicbrainz.org/artist/*
@@ -246,7 +248,7 @@
         // Global CSS
         const style = document.createElement('style');
         style.innerHTML = `
-            .rym-stealth-hide { 
+            .rym-stealth-hide {
                 position: fixed !important;
                 top: 0 !important;
                 right: 0 !important;
@@ -331,6 +333,102 @@
             });
         }
 
+        // MUSIK-SAMMLER HARVESTER
+        if (window.location.host.includes('musik-sammler.de')) {
+            const harvestBtn = createHarvestButton('Musik-Sammler');
+            harvestBtn.on('click', function () {
+                let data = [];
+                $('#albums, #singles, #compilations').each(function() {
+                    const h2 = $(this);
+                    const id = h2.attr('id');
+
+                    const list = h2.nextAll('ul.discography').first();
+                    if (!list.length) return;
+
+                    let type = "Album";
+                    if (id === 'singles') type = "Single/EP";
+                    else if (id === 'compilations') type = "Compilation";
+
+                    list.find('li').each(function() {
+                        const item = $(this);
+                        const link = item.find('a[itemprop="url"]').first();
+                        if (!link.length) return;
+
+                        const title = link.find('[itemprop="name"]').text().trim() || link.text().trim();
+                        const rawUrl = link.attr('href');
+                        const fullUrl = rawUrl.startsWith('http') ? rawUrl : "https://www.musik-sammler.de" + rawUrl;
+
+                        const cell = link.closest('.cell');
+                        let year = "?";
+                        if (cell.length) {
+                            const cellText = cell.text().trim();
+                            const matchYear = cellText.match(/^\s*(\d{4})\s*-/);
+                            if (matchYear) {
+                                year = matchYear[1];
+                            } else {
+                                const titleAttr = link.attr('title') || "";
+                                const matchFallback = titleAttr.match(/\((\d{4})\)/) || cellText.match(/\b(\d{4})\b/);
+                                if (matchFallback) {
+                                    year = matchFallback[1];
+                                }
+                            }
+                        }
+
+                        data.push({ title: title.replace(/[✅❌⏳]/g, '').trim(), url: normalizeUrl(fullUrl), year, type, source: 'Musik-Sammler' });
+                    });
+                });
+
+                if (data.length === 0) { alert("No releases found."); return; }
+
+                GM_setClipboard(JSON.stringify(data));
+                harvestBtn.text('✅ Copied ' + data.length).css('background', '#28a745');
+                setTimeout(() => harvestBtn.text('📋 Copy Musik-Sammler Data').css('background', '#0055ff'), 2000);
+            });
+        }
+
+        // ALLMUSIC HARVESTER
+        if (window.location.host.includes('allmusic.com')) {
+            const harvestBtn = createHarvestButton('AllMusic');
+            harvestBtn.on('click', function () {
+                let data = [];
+
+                let defaultType = "Release";
+                const selectedType = $('#releaseType').val();
+                if (selectedType === 'main') {
+                    defaultType = 'Album';
+                } else if (selectedType === 'compilations') {
+                    defaultType = 'Compilation';
+                } else if (selectedType === 'singles') {
+                    defaultType = 'Single/EP';
+                }
+
+                $('#discographyResults tbody tr').each(function () {
+                    const row = $(this);
+                    const link = row.find('td.meta span.title div.desktopOnly a').first();
+                    if (!link.length) return;
+
+                    const title = link.text().trim();
+                    const rawUrl = link.attr('href');
+                    const fullUrl = rawUrl.startsWith('http') ? rawUrl : "https://www.allmusic.com" + rawUrl;
+                    const year = row.find('td.year').text().trim() || "?";
+
+                    data.push({
+                        title: title.replace(/[✅❌⏳]/g, '').trim(),
+                        url: normalizeUrl(fullUrl),
+                        year,
+                        type: defaultType,
+                        source: 'AllMusic'
+                    });
+                });
+
+                if (data.length === 0) { alert("No releases found."); return; }
+
+                GM_setClipboard(JSON.stringify(data));
+                harvestBtn.text('✅ Copied ' + data.length).css('background', '#28a745');
+                setTimeout(() => harvestBtn.text('📋 Copy AllMusic Data').css('background', '#0055ff'), 2000);
+            });
+        }
+
         // MB MATCHER
         if (window.location.host.includes('musicbrainz.org')) {
             const injectUI = () => {
@@ -349,7 +447,7 @@
                 const header = $('<div id="rym-ui-header"></div>').css({
                     'background': '#eee', 'padding': '8px 15px', 'cursor': 'pointer', 'display': 'flex',
                     'justify-content': 'space-between', 'font-weight': 'bold', 'font-size': '11px'
-                }).append('<span id="rym-ui-title">Release Group link automator</span><span id="rym-ui-icon">' + (isExpanded ? '▼' : '◀') + '</span>');
+                }).append('<span id="rym-ui-title">Release Group link automator <span class="tooltip-wrapper"><span class="img icon help" style="display: inline-block; margin-left: 10px; vertical-align: text-top;"></span><span class="tooltip-container"><span class="tooltip-triangle"></span><span class="tooltip-content"><div style="text-align: left;">Open the artist\'s Discogs, RYM, AllMusic or Musik-Sammler page and click the blue \'Copy Data\' icon. Then paste the results into this field.</div></span></span></span></span><span id="rym-ui-icon">' + (isExpanded ? '▼' : '◀') + '</span>');
 
                 const content = $('<div id="rym-ui-content"></div>').css({ 'padding': '10px', 'display': isExpanded ? 'block' : 'none' });
                 const input = $('<textarea id="rym-input-box" placeholder="Paste JSON here..."></textarea>').css({ 'width': '100%', 'height': '50px', 'font-size': '11px' });
@@ -359,11 +457,19 @@
                 container.append(header).append(content);
                 $('#content h2').first().after(container).after('<div style="clear:both"></div>');
 
+                const tooltipWrapper = header.find('.tooltip-wrapper');
+                tooltipWrapper.toggle(isExpanded);
+
+                tooltipWrapper.on('click', (e) => {
+                    e.stopPropagation();
+                });
+
                 header.on('click', () => {
                     content.toggle();
                     isExpanded = content.is(':visible');
                     localStorage.setItem('rym-automator-expanded', isExpanded);
                     container.css('float', isExpanded ? 'none' : 'right').css('width', isExpanded ? '100%' : 'auto');
+                    tooltipWrapper.toggle(isExpanded);
                     $('#rym-ui-icon').text(isExpanded ? '▼' : '◀');
                 });
 
