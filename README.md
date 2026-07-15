@@ -100,7 +100,7 @@ Show if RYM artists/labels/release-groups are linked from MusicBrainz. Is probab
 
 ### <a name="musicbrainz_release_group_linker"></a> MusicBrainz Release Group Linker
 
-Copy RYM or Discogs 'release group' data to clipboard to compare and click to add the relationships in MB artist pages.
+Copy RYM, Discogs, AllMusic or Musik-Sammler 'release group' data to clipboard to compare and click to add the relationships in MB artist pages.
 Incorporates RandomMushroom128's 'MusicBrainz: add release(group) links from level above' userscript (with permission).
 Recommended companion script:
 <a href="https://github.com/murdos/musicbrainz-userscripts/blob/master/mb_relationship_shortcuts.user.js">
