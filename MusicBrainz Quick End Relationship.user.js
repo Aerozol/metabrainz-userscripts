@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         MusicBrainz: Quick End Relationship
+// @name         MusicBrainz Quick End Relationship
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Clicking the external link (x) cycles through "ended" -> "removed" -> "undo" states, instead of just removing.
 // @version      1.0
