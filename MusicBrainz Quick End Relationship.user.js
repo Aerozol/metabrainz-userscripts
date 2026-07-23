@@ -2,7 +2,7 @@
 // @name         MusicBrainz Quick End Relationship
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Clicking the external link (x) cycles through "ended" -> "removed" -> "undo" states, instead of just removing.
-// @version      1.0
+// @version      1.1
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20End%20Relationship.user.js
 // @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20End%20Relationship.user.js
 // @license      MIT
@@ -350,24 +350,29 @@
         }
     }
 
-    // Intercept clicks on remove-item buttons in capture phase
-    const interceptEvents = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
-    interceptEvents.forEach(eventType => {
-        document.addEventListener(eventType, function (e) {
-            const button = e.target.closest('.remove-item, [title*="Remove"], [title*="remove"], [title*="Delete"], [title*="delete"], button.nobutton.icon');
-            if (bypassing) return;
-            if (!button) return;
-            
-            // Prevent MusicBrainz from executing its native handlers
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            
-            // Execute state machine on 'click' event
-            if (eventType === 'click') {
-                handleRemoveClick(button);
-            }
-        }, true);
-    });
+// Intercept clicks on remove-item buttons in capture phase (ONLY within External Links)
+const interceptEvents = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
+interceptEvents.forEach(eventType => {
+    document.addEventListener(eventType, function (e) {
+        // 1. Ensure the click originated inside the external links container
+        const container = e.target.closest('.external-links-editor-container');
+        if (!container) return;
+
+        // 2. Locate the remove button inside this container
+        const button = e.target.closest('.remove-item, [title*="Remove"], [title*="remove"], [title*="Delete"], [title*="delete"], button.nobutton.icon');
+        if (bypassing) return;
+        if (!button) return;
+
+        // Prevent MusicBrainz from executing its native handlers
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+
+        // Execute state machine on 'click' event
+        if (eventType === 'click') {
+            handleRemoveClick(button);
+        }
+    }, true);
+});
 
 })();
