@@ -50,6 +50,22 @@ Adds buttons for quickly adding mediums from a customisable range of formats in 
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
+### <a name="musicbrainz_quick_end_relationship"></a> MusicBrainz Quick End Relationship
+
+Clicking the external link (x) cycles through "ended" -> "removed" -> "undo" states, instead of just removing.
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/blob/main/MusicBrainz%20Quick%20End%20Relationship.user.js">
+  <img src="https://github.com/jerone/UserScripts/blob/master/_resources/Source-button.png" alt="Source" title="Source"">
+</a>
+
+<a href="https://github.com/Aerozol/metabrainz-userscripts/raw/main/MusicBrainz%20Quick%20End%20Relationship.user.js">
+  <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
+</a>
+
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick_aend_relationship.png" target="_blank">
+  <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
+</a>
+
 ### <a name="musicbrainz_quick_join_phrases"></a> MusicBrainz Quick Join Phrases
 
 Adds a number of shortcuts that will fill some common join phrases into the second-to-last join phrase field. Works!
