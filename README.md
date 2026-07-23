@@ -62,7 +62,7 @@ Clicking the external link (x) cycles through "ended" -> "removed" -> "undo" sta
   <img src="https://raw.github.com/jerone/UserScripts/master/_resources/Install-button.png" alt="Install" title="Install""> 
 </a>
 
-<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick_end_relationship.png" target="_blank">
+<a href="https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/refs/heads/main/screenshots/quick_end_relationships.png" target="_blank">
   <img src="./screenshots/Screenshot-button.png" alt="Screenshot" title="Screenshot""> 
 </a>
 
