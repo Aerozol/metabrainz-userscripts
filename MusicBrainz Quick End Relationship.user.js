@@ -7,12 +7,9 @@
 // @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Quick%20End%20Relationship.user.js
 // @license      MIT
 // @author       Antigravity
-// @match        *://musicbrainz.org/release/*
-// @match        *://beta.musicbrainz.org/release/*
-// @match        *://test.musicbrainz.org/release/*
-// @match        *://*.musicbrainz.org/release/*
-// @match        *://*.musicbrainz.org/release/*/edit*
-// @match        *://*.musicbrainz.org/release/add*
+// @match        *://musicbrainz.org/*
+// @match        *://beta.musicbrainz.org/*
+// @match        *://test.musicbrainz.org/*
 // @run-at       document-start
 // @grant        none
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
