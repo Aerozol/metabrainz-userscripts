@@ -2,7 +2,7 @@
 // @name         MusicBrainz Quick Recording > Work Attribute Editor
 // @description  Automatically sets the 'Cover' recording > work attribute from a work page
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
-// @version      0.1
+// @version      0.2
 // @downloadURL  https://github.com/Aerozol/metabrainz-userscripts/raw/refs/heads/main/drafts/MusicBrainz%20Quick%20Recording%20Work%20Attribute%20Editor.user.js
 // @updateURL  https://github.com/Aerozol/metabrainz-userscripts/raw/refs/heads/main/drafts/MusicBrainz%20Quick%20Recording%20Work%20Attribute%20Editor.user.js
 // @license      MIT
@@ -23,19 +23,54 @@ const isRecordingEditPage = window.location.pathname.startsWith('/recording/') &
 
 let monitorPanel = null;
 let logContainer = null;
+let tickerWrapper = null;
+let tickerText = null;
+let isMinimised = GM_getValue('mb_monitor_minimised', false);
+
+function makeDraggable(element, handle) {
+    let posX = 0, posY = 0, mouseX = 0, mouseY = 0;
+    handle.style.cursor = 'move';
+
+    handle.onmousedown = (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        e.preventDefault();
+
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+
+        document.onmousemove = (e) => {
+            e.preventDefault();
+            posX = mouseX - e.clientX;
+            posY = mouseY - e.clientY;
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+
+            element.style.top = (element.offsetTop - posY) + 'px';
+            element.style.left = (element.offsetLeft - posX) + 'px';
+            element.style.right = 'auto';
+        };
+
+        document.onmouseup = () => {
+            document.onmousemove = null;
+            document.onmouseup = null;
+        };
+    };
+}
 
 function buildMonitorPanel() {
     if (monitorPanel) return;
 
     monitorPanel = document.createElement('div');
     monitorPanel.id = 'mb-interactive-monitor';
-    // Adjusted back to a narrower width for a cleaner, unobtrusive workspace view
+    
+    const initialRightOffset = window.innerWidth - 490;
+    
     monitorPanel.style.cssText = `
         position: fixed;
         top: 10px;
-        right: 10px;
+        left: ${initialRightOffset > 10 ? initialRightOffset : 10}px;
         width: 480px;
-        height: calc(100vh - 40px);
+        height: ${isMinimised ? 'auto' : 'calc(100vh - 40px)'};
         background: #222;
         border: 2px solid #444;
         border-radius: 6px;
@@ -46,15 +81,47 @@ function buildMonitorPanel() {
         overflow: hidden;
     `;
 
+    // Header container
     const header = document.createElement('div');
-    header.style.cssText = 'background: #333; color: #fff; padding: 8px; font-family: sans-serif; font-size: 12px; font-weight: bold; border-bottom: 1px solid #555;';
-    header.innerText = '🎵 MB Quick Cover: Automation Monitor';
+    header.style.cssText = 'background: #333; color: #fff; padding: 6px 10px; font-family: sans-serif; font-size: 12px; font-weight: bold; border-bottom: 1px solid #555; display: flex; align-items: center; justify-content: space-between; user-select: none; gap: 8px;';
+
+    const titleText = document.createElement('span');
+    titleText.innerText = '🎵 MB Quick Cover';
+    titleText.style.cssText = 'white-space: nowrap; flex-shrink: 0;';
+    header.appendChild(titleText);
+
+    // Green text header ticker bar (only visible when minimised)
+    tickerWrapper = document.createElement('div');
+    tickerWrapper.style.cssText = `flex-grow: 1; overflow: hidden; white-space: nowrap; height: 16px; position: relative; font-family: monospace; font-size: 11px; display: ${isMinimised ? 'block' : 'none'};`;
+    
+    tickerText = document.createElement('span');
+    tickerText.style.cssText = 'display: inline-block; color: #0f0; transition: opacity 0.3s;';
+    tickerText.innerText = '';
+    tickerWrapper.appendChild(tickerText);
+    header.appendChild(tickerWrapper);
+
+    // Controls container (Minimise Button)
+    const controls = document.createElement('div');
+    controls.style.cssText = 'flex-shrink: 0;';
+    
+    const minBtn = document.createElement('button');
+    minBtn.innerText = isMinimised ? '🗖' : '—';
+    minBtn.title = 'Minimise / Restore';
+    minBtn.style.cssText = 'background: #444; color: #fff; border: 1px solid #666; border-radius: 3px; cursor: pointer; padding: 0px 6px; font-size: 11px; line-height: 14px;';
+    
+    controls.appendChild(minBtn);
+    header.appendChild(controls);
     monitorPanel.appendChild(header);
 
+    // Body content container
+    const panelContent = document.createElement('div');
+    panelContent.id = 'mb-monitor-content';
+    panelContent.style.cssText = `display: ${isMinimised ? 'none' : 'flex'}; flex-direction: column; flex-grow: 1; height: calc(100% - 33px);`;
+
     logContainer = document.createElement('div');
-    logContainer.style.cssText = 'height: 120px; background: #111; color: #0f0; font-family: monospace; font-size: 11px; padding: 8px; overflow-y: auto; border-bottom: 1px solid #444; white-space: pre-wrap;';
+    logContainer.style.cssText = 'height: 120px; background: #111; color: #0f0; font-family: monospace; font-size: 11px; padding: 8px; overflow-y: auto; border-bottom: 1px solid #444; white-space: pre-wrap; flex-shrink: 0;';
     logContainer.innerText = '[System] System Ready. Click "Set Cover" on an album row below.\n';
-    monitorPanel.appendChild(logContainer);
+    panelContent.appendChild(logContainer);
 
     const frameWrapper = document.createElement('div');
     frameWrapper.style.cssText = 'flex-grow: 1; background: #fff; position: relative;';
@@ -65,7 +132,28 @@ function buildMonitorPanel() {
     framePlaceholder.innerText = 'No active recording page loaded yet.';
     frameWrapper.appendChild(framePlaceholder);
 
-    monitorPanel.appendChild(frameWrapper);
+    panelContent.appendChild(frameWrapper);
+    monitorPanel.appendChild(panelContent);
+
+    // Toggle minimise behavior & persist state
+    minBtn.onclick = () => {
+        isMinimised = !isMinimised;
+        GM_setValue('mb_monitor_minimised', isMinimised);
+        
+        if (isMinimised) {
+            panelContent.style.display = 'none';
+            tickerWrapper.style.display = 'block';
+            monitorPanel.style.height = 'auto';
+            minBtn.innerText = '🗖';
+        } else {
+            panelContent.style.display = 'flex';
+            tickerWrapper.style.display = 'none';
+            monitorPanel.style.height = 'calc(100vh - 40px)';
+            minBtn.innerText = '—';
+        }
+    };
+
+    makeDraggable(monitorPanel, header);
     document.body.appendChild(monitorPanel);
 }
 
@@ -73,8 +161,16 @@ function appendLog(message, recMbid = '') {
     buildMonitorPanel();
     const timestamp = new Date().toLocaleTimeString();
     const prefix = recMbid ? `(${recMbid.substring(0,6)}) ` : '';
-    logContainer.innerText += `[${timestamp}] ${prefix}${message}\n`;
+    const formattedMsg = `[${timestamp}] ${prefix}${message}`;
+    
+    // Append to main workspace log window
+    logContainer.innerText += `${formattedMsg}\n`;
     logContainer.scrollTop = logContainer.scrollHeight;
+
+    // Update header ticker bar
+    if (tickerText) {
+        tickerText.innerText = `► ${prefix}${message}`;
+    }
 }
 
 // ==========================================
@@ -221,7 +317,6 @@ if (isRecordingEditPage && window.self !== window.top) {
                     postLog("Writing automated annotation description data inside the Edit Note field...");
                     const editNoteBox = document.querySelector('textarea[name*="edit_note"], textarea[id*="edit-note"]');
                     if (editNoteBox) {
-                        // Custom edit note statement block applied per user specifications
                         editNoteBox.value = "Cover attribute set by 'MusicBrainz Quick Recording > Work Attribute Editor' userscript, see: https://github.com/Aerozol/metabrainz-userscripts";
                         editNoteBox.dispatchEvent(new Event('input', { bubbles: true }));
                         editNoteBox.dispatchEvent(new Event('change', { bubbles: true }));
