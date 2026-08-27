@@ -1,0 +1,52 @@
+$noop(this is a comment - add a bracket after a noop line to activate that script)
+
+$noop(★ Detect Various Artist ★)
+$if($eq(%albumartist%,Various Artists),
+  $set(_isVarious,1)
+)
+
+$noop(*********************)
+$noop(VARIOUS ARTISTS SCRIPT)
+$noop(*********************)
+
+$if(%_isVarious%,
+
+$noop(ARTIST FOLDER)
+_Various/
+
+$noop(ALBUM FOLDER) 
+$noop(dalbum title)$replace(%album%,:,-) 
+$noop(date)\($left(%originaldate%,4)\) 
+$noop([ep] or [single])$if($in(%releasetype%,single),[single] )$if($in(%releasetype%,ep),[EP] )
+$noop([yyyy reissue])$if($eq($year(%date%),$year(%originaldate%)),,[$year(%date%) reissue] )
+$noop([soundtrack])$if($in(%releasetype%,soundtrack),[soundtrack] )
+$noop([live])$if($in(%releasetype%,live),[live] )
+$noop([bootleg])$if($in(%releasestatus%,bootleg),[bootleg] )
+$noop([special format])$if($in(%media%,CD-R),[CD-R] )$if($in(%media%,8cm CD),[8cm CD] )$if($in(%media%,Cassette),[cassette] )
+$noop([flac] or [bitrate])$if($in(%_extension%,flac),[FLAC])$if($ne(%_extension%,flac),[%_bitrate%])/
+
+$noop(TRACK NAME)
+$if($gt(%totaldiscs%,1),%discnumber%-,)$if($and(%albumartist%,%tracknumber%),$num(%tracknumber%,2) ,)$if(%_multiartist%,%artist% - ,)%title%)
+
+$noop(*********************)
+$noop(STANDARD ALBUM SCRIPT)
+$noop(*********************)
+
+$if($ne(%_isVarious%,1),
+
+$noop(ARTIST FOLDER)
+$if2(%albumartist%,%artist%)/
+
+$noop(ALBUM FOLDER)
+$noop(date - album title)\($left(%originaldate%,4)\) $replace(%album%,:,-) 
+$noop([ep] or [single])$if($in(%releasetype%,single),[single] )$if($in(%releasetype%,ep),[EP] )
+$noop([yyyy reissue])$if($eq($year(%date%),$year(%originaldate%)),,[$year(%date%) reissue] )
+$noop([soundtrack])$if($in(%releasetype%,soundtrack),[soundtrack] )
+$noop([compilation])$if($in(%releasetype%,compilation),[compilation] )
+$noop([live])$if($in(%releasetype%,live),[live] )
+$noop([bootleg])$if($in(%releasestatus%,bootleg),[bootleg] )
+$noop([special format])$if($in(%media%,CD-R),[CD-R] )$if($in(%media%,8cm CD),[8cm CD] )$if($in(%media%,Cassette),[cassette] )
+$noop([flac] or [bitrate])$if($in(%_extension%,flac),[FLAC])$if($ne(%_extension%,flac),[%_bitrate%])/
+
+$noop(TRACK NAME)
+$if($gt(%totaldiscs%,1),%discnumber%-,)$if($and(%albumartist%,%tracknumber%),$num(%tracknumber%,2) ,)$if(%_multiartist%,%artist% - ,)%title%)
