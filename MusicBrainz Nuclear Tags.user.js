@@ -2,7 +2,7 @@
 // @name MusicBrainz Nuclear Tags
 // @namespace    https://github.com/Aerozol/metabrainz-userscripts
 // @description  Quick buttons to submit and remember tag strings (ctrl+click to forget them). Submit and withdraw tags from selected sub-entities.
-// @version      1.6
+// @version      1.7
 // @downloadURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @updateURL  https://raw.githubusercontent.com/Aerozol/metabrainz-userscripts/master/MusicBrainz%20Nuclear%20Tags.user.js
 // @license      MIT
@@ -12,6 +12,10 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // ==/UserScript==
+
+// Changelog:
+// 1.7 - Release pages: restore the bulk-tag recording checkbox column when React
+//       re-renders the tracklist after a hydration mismatch (React error #418).
 
 (function () {
     'use strict';
@@ -878,34 +882,51 @@
     }
 
     // --- Recording Checkbox Injection ---
+    /**
+     * Adds the bulk-tag checkbox column to every release tracklist table.
+     * Idempotent: only adds the header cell / row cells that are missing, so it can be
+     * re-run whenever MusicBrainz (React) re-renders the tracklist. Row cells added to a
+     * table that already has a master checkbox follow that master checkbox's state.
+     * @param {boolean} isToggled - Initial state for a newly created master checkbox and its rows.
+     * @returns {boolean} True if any header or row cell was added.
+     */
     function addRecordingCheckboxes(isToggled) {
         const tracklistTables = document.querySelectorAll('table.tbl.medium');
+        let added = false;
 
         tracklistTables.forEach(table => {
             let headRow = table.querySelector('thead tr.subh') || table.querySelector('tbody tr.subh');
 
-            if (!headRow || headRow.querySelector('th.elephant-tag-col')) return;
+            if (!headRow) return;
 
-            const newHeader = document.createElement('th');
-            newHeader.classList.add('elephant-tag-col');
-            newHeader.title = 'Bulk Tag Recordings';
+            let masterCheckbox = headRow.querySelector('input[name="elephant-tag-master"]');
+            if (!masterCheckbox) {
+                const newHeader = document.createElement('th');
+                newHeader.classList.add('elephant-tag-col');
+                newHeader.title = 'Bulk Tag Recordings';
 
-            const masterCheckbox = document.createElement('input');
-            masterCheckbox.type = 'checkbox';
-            masterCheckbox.name = 'elephant-tag-master';
-            masterCheckbox.title = 'Toggle all visible recording tags';
-            masterCheckbox.checked = isToggled;
+                masterCheckbox = document.createElement('input');
+                masterCheckbox.type = 'checkbox';
+                masterCheckbox.name = 'elephant-tag-master';
+                masterCheckbox.title = 'Toggle all visible recording tags';
+                masterCheckbox.checked = isToggled;
 
-            masterCheckbox.addEventListener('change', (e) => {
-                table.querySelectorAll(RECORDING_CHECKBOX_SELECTOR).forEach(cb => {
-                    cb.checked = e.target.checked;
+                masterCheckbox.addEventListener('change', (e) => {
+                    table.querySelectorAll(RECORDING_CHECKBOX_SELECTOR).forEach(cb => {
+                        cb.checked = e.target.checked;
+                    });
                 });
-            });
-            headRow.prepend(newHeader);
-            newHeader.appendChild(masterCheckbox); // Append master checkbox to its header
+                headRow.prepend(newHeader);
+                newHeader.appendChild(masterCheckbox); // Append master checkbox to its header
+                added = true;
+            }
+
+            // Rows added later (re-rendered or newly loaded) follow the master checkbox
+            const rowChecked = masterCheckbox.checked;
 
             table.querySelectorAll('tbody > tr').forEach(row => {
                 if (row.classList.contains('subh') || !row.querySelector('td.pos')) return;
+                if (row.querySelector(':scope > td.elephant-tag-col')) return;
 
                 const newCell = document.createElement('td');
                 newCell.classList.add('elephant-tag-col');
@@ -913,12 +934,15 @@
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.name = 'elephant-tag-checkbox';
-                checkbox.checked = isToggled;
+                checkbox.checked = rowChecked;
 
                 row.prepend(newCell); // Prepend new cell to the row
                 newCell.appendChild(checkbox);
+                added = true;
             });
         });
+
+        return added;
     }
 
     // --- Series Checkbox Injection ---
@@ -1628,7 +1652,27 @@
         // Continuous observation to handle dynamic content loads (e.g. React/htmx updates)
         mainObserver = new MutationObserver(() => {
             addTaggingUI();
+            restoreRecordingCheckboxes();
         });
+        mainObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    /**
+     * Restores the recording checkbox column on release pages after React re-rendered it away.
+     * The release tracklist is rendered by React, which can replace it after the checkbox
+     * column was added: if that happens before React hydrates the page, the extra cells cause a
+     * hydration mismatch (React error #418) and React discards div.tracklist-and-credits and
+     * renders it again from scratch, without the column. addTaggingUI() never runs again
+     * because the form already has its wrapper, so put back whatever is missing here.
+     * The main observer is disconnected while cells are added, so this cannot loop.
+     * @returns {void}
+     */
+    function restoreRecordingCheckboxes() {
+        if (!/\/release\/[0-9a-f-]+/i.test(location.pathname)) return;
+        if (!document.querySelector('#tag-form .elephant-tags-wrapper')) return;
+
+        mainObserver.disconnect();
+        addRecordingCheckboxes(isToggledRecordings);
         mainObserver.observe(document.body, { childList: true, subtree: true });
     }
 
