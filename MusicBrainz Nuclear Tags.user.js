@@ -13,10 +13,6 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-// Changelog:
-// 1.7 - Release pages: restore the bulk-tag recording checkbox column when React
-//       re-renders the tracklist after a hydration mismatch (React error #418).
-
 (function () {
     'use strict';
 
